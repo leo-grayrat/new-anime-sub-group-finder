@@ -6,3 +6,4 @@ data/
 config.json
 *.egg-info/
 .superpowers/
+.cache/
