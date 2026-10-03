@@ -6,8 +6,14 @@ from fansub_finder.store import Store
 
 
 def release(**kw):
-    return Release(source="mikan", source_id="r1", title="[北宇治字幕组] 测试番 [01][WEB-DL][简繁内封]",
-                   group="北宇治字幕组", anime_id="bgm:123", **kw)
+    return Release(
+        source="mikan",
+        source_id="r1",
+        title="[北宇治字幕组] 测试番 [01][WEB-DL][简繁内封]",
+        group="北宇治字幕组",
+        anime_id="bgm:123",
+        **kw,
+    )
 
 
 def test_explicit_blocking_and_name_boundaries():
@@ -18,8 +24,12 @@ def test_explicit_blocking_and_name_boundaries():
         r = release()
         r.title = f"[好组] 测试番 [01][{tag}]"
         assert rules.check(r)
-    for title in ["[Anima] Crimson [01][WEB-DL][简体]", "[北宇治字幕组] 测试番 [01][WEB-DL]",
-                  "[好组] 测试番 [01][CHT]", "[好组] 测试番 [01][MultiSub]"]:
+    for title in [
+        "[Anima] Crimson [01][WEB-DL][简体]",
+        "[北宇治字幕组] 测试番 [01][WEB-DL]",
+        "[好组] 测试番 [01][CHT]",
+        "[好组] 测试番 [01][MultiSub]",
+    ]:
         r = release()
         r.title = title
         assert rules.check(r) == []
@@ -42,10 +52,22 @@ def test_episode_ranges_and_versions():
 
 def test_airing_scope_ignores_upload_recency():
     assert scope_for(Anime(id="bgm:1", title="新番", premiere="2026-10-01"), "2026-10") == "current"
-    assert scope_for(Anime(id="bgm:2", title="续播", premiere="2026-07-01",
-                           episode_dates=["2026-10-05", "2026-10-12", "2026-10-19"]), "2026-10") == "continuing"
-    assert scope_for(Anime(id="bgm:3", title="收尾", premiere="2026-07-01",
-                           end_date="2026-09-30"), "2026-10") == "excluded"
+    assert (
+        scope_for(
+            Anime(
+                id="bgm:2",
+                title="续播",
+                premiere="2026-07-01",
+                episode_dates=["2026-10-05", "2026-10-12", "2026-10-19"],
+            ),
+            "2026-10",
+        )
+        == "continuing"
+    )
+    assert (
+        scope_for(Anime(id="bgm:3", title="收尾", premiere="2026-07-01", end_date="2026-09-30"), "2026-10")
+        == "excluded"
+    )
     assert scope_for(Anime(id="bgm:4", title="资料不足", premiere="2026-07-01"), "2026-10") == "uncertain"
 
 
@@ -60,10 +82,14 @@ def test_store_baseline_dedup_changes_and_reclassification(tmp_path):
     store.ingest(b, Rules(), baseline=False)
     assert len(store.releases("bgm:123")) == 1
     assert len(store.releases("bgm:123")[0]["origins"]) == 2
-    new = a.model_copy(update={"group": "新组", "source_id": "r3", "magnet": "magnet:?xt=urn:btih:" + "b" * 40})
+    new = a.model_copy(
+        update={"group": "新组", "source_id": "r3", "magnet": "magnet:?xt=urn:btih:" + "b" * 40}
+    )
     store.ingest(new, Rules(), baseline=False)
     assert len(store.changes()) == 1
-    ep2 = new.model_copy(update={"source_id": "r4", "title": "[新组] 测试番 [02]", "magnet": "magnet:?xt=urn:btih:" + "c" * 40})
+    ep2 = new.model_copy(
+        update={"source_id": "r4", "title": "[新组] 测试番 [02]", "magnet": "magnet:?xt=urn:btih:" + "c" * 40}
+    )
     store.ingest(ep2, Rules(), baseline=False)
     assert len(store.changes()) == 1
     store.reclassify(Rules(groups=["新组"]))
@@ -74,3 +100,16 @@ def test_store_baseline_dedup_changes_and_reclassification(tmp_path):
     store = Store(tmp_path / "test.sqlite")
     store.ingest(ep2, Rules(), baseline=False)
     assert len(store.changes()) == 1
+
+
+def test_sparse_feed_does_not_erase_publisher_or_rss(tmp_path):
+    store = Store(tmp_path / "db.sqlite")
+    a = release(
+        publisher="Kirara Fantasia", rss="https://example.com/feed", magnet="magnet:?xt=urn:btih:" + "d" * 40
+    )
+    store.ingest(a, Rules(), baseline=True)
+    store.ingest(a.model_copy(update={"publisher": "", "rss": "", "magnet": ""}), Rules(), baseline=False)
+    rows = store.releases(blocked=True)
+    assert len(rows) == 1
+    assert rows[0]["publisher"] == "Kirara Fantasia"
+    assert rows[0]["rss"] == "https://example.com/feed"

@@ -6,6 +6,7 @@ from fansub_finder.network import Network
 
 async def test_retry_and_304_preserve_valid_payload():
     calls = []
+
     def handler(request):
         calls.append(request)
         if len(calls) == 1:
@@ -14,6 +15,7 @@ async def test_retry_and_304_preserve_valid_payload():
             return httpx.Response(200, text='{"ok":true}', headers={"ETag": '"one"'})
         assert request.headers.get("if-none-match") == '"one"'
         return httpx.Response(304)
+
     async with Network(proxy="", transport=httpx.MockTransport(handler), interval=0) as net:
         assert await net.json("https://anibt.net/test") == {"ok": True}
         assert await net.json("https://anibt.net/test") == {"ok": True}

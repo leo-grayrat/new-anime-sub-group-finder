@@ -13,15 +13,22 @@ class QueryService:
         for source in ["mikan", "garden", "anibt", "bgm"]:
             status = self.store.get_state(f"status:{source}", {"phase": "pending", "last_success": None})
             last = status.get("last_success")
-            age = (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() if last else None
+            age = (
+                (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() if last else None
+            )
             status["stale"] = age is None or age > self.monitor.config.poll_minutes * 60 * 3
             if source == "bgm" and age is not None:
                 status["stale"] = age > self.monitor.config.catalog_hours * 3600 * 2
             status["baseline_complete"] = self.store.get_state(f"baseline:{source}", False)
             statuses[source] = status
-        return {"sources": statuses, "progress": self.monitor.progress, "last_scan": self.store.get_state("last_scan"),
-                "season": self.monitor.config.season, "data_time": self.store.get_state("last_scan"),
-                "proxy": self.monitor.config.proxy or "直连"}
+        return {
+            "sources": statuses,
+            "progress": self.monitor.progress,
+            "last_scan": self.store.get_state("last_scan"),
+            "season": self.monitor.config.season,
+            "data_time": self.store.get_state("last_scan"),
+            "proxy": self.monitor.config.proxy or "直连",
+        }
 
     def envelope(self, items):
         return {"items": items, "status": self.status()}
@@ -31,7 +38,9 @@ class QueryService:
         result = []
         for a in self.store.animes():
             category = scope_for(a, season)
-            if scope == "active" and category not in (["current", "continuing"] if include_continuing else ["current"]):
+            if scope == "active" and category not in (
+                ["current", "continuing"] if include_continuing else ["current"]
+            ):
                 continue
             if scope not in ["active", "all"] and category != scope:
                 continue
@@ -40,9 +49,15 @@ class QueryService:
             groups = self.store.groups(a.id)
             if has_groups and not groups:
                 continue
-            result.append({**a.model_dump(), "scope": category, "group_count": len(groups),
-                           "groups": [{"name": g["name"], "episodes": g["episodes"]} for g in groups]})
-        result.sort(key=lambda a: (-a["group_count"], a["title"]))
+            result.append(
+                {
+                    **a.model_dump(),
+                    "scope": category,
+                    "group_count": len(groups),
+                    "groups": [{"name": g["name"], "episodes": g["episodes"]} for g in groups],
+                }
+            )
+        result.sort(key=lambda a: (a["scope"] != "current", -a["group_count"], a["title"]))
         return self.envelope(result)
 
     def list_groups(self, anime_id):

@@ -6,8 +6,12 @@ from mcp.types import ToolAnnotations
 
 
 def create_mcp(provider):
-    mcp = FastMCP("新番字幕组发现", stateless_http=True, json_response=True,
-                  instructions="查询本机持续采集的三站资源。保留 status 中的过期或失败信息；未命中黑名单不代表已证实原创字幕。")
+    mcp = FastMCP(
+        "新番字幕组发现",
+        stateless_http=True,
+        json_response=True,
+        instructions="查询本机持续采集的三站资源。保留 status 中的过期或失败信息；未命中黑名单不代表已证实原创字幕。",
+    )
     read = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True)
 
     async def call(name, **kwargs):
@@ -15,11 +19,22 @@ def create_mcp(provider):
         return await result if inspect.isawaitable(result) else result
 
     @mcp.tool(annotations=read)
-    async def list_anime(season: str | None = None, include_continuing: bool = True, keyword: str = "",
-                         scope: str = "active", has_groups: bool = False) -> dict:
+    async def list_anime(
+        season: str | None = None,
+        include_continuing: bool = True,
+        keyword: str = "",
+        scope: str = "active",
+        has_groups: bool = False,
+    ) -> dict:
         """查询季度番剧及可用组。season 格式 YYYY-01/04/07/10；scope 为 active/current/continuing/uncertain/excluded/all。"""
-        return await call("list_anime", season=season, include_continuing=include_continuing,
-                          keyword=keyword, scope=scope, has_groups=has_groups)
+        return await call(
+            "list_anime",
+            season=season,
+            include_continuing=include_continuing,
+            keyword=keyword,
+            scope=scope,
+            has_groups=has_groups,
+        )
 
     @mcp.tool(annotations=read)
     async def list_groups(anime_id: str) -> dict:
@@ -46,12 +61,17 @@ def create_mcp(provider):
 
 def run_stdio(base_url):
     async def provider(name, params):
-        paths = {"list_anime": "/api/anime", "list_groups": "/api/anime/{anime_id}/groups",
-                 "list_releases": "/api/anime/{anime_id}/releases", "list_changes": "/api/changes",
-                 "get_status": "/api/status"}
+        paths = {
+            "list_anime": "/api/anime",
+            "list_groups": "/api/anime/{anime_id}/groups",
+            "list_releases": "/api/anime/{anime_id}/releases",
+            "list_changes": "/api/changes",
+            "get_status": "/api/status",
+        }
         path = paths[name]
         if "anime_id" in params:
             from urllib.parse import quote
+
             path = path.format(anime_id=quote(params.pop("anime_id"), safe=""))
         params = {k: str(v).lower() if isinstance(v, bool) else v for k, v in params.items() if v is not None}
         try:
@@ -61,4 +81,5 @@ def run_stdio(base_url):
                 return r.json()
         except httpx.HTTPError as e:
             raise RuntimeError(f"无法查询常驻服务，请先启动网页服务：{base_url}；{e}") from e
+
     create_mcp(provider).run(transport="stdio")

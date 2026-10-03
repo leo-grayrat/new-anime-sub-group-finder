@@ -7,12 +7,17 @@ from fansub_finder.rules import Rules
 
 
 def test_queries_and_settings_reclassification_do_not_create_changes(tmp_path):
-    app = create_app(Config(proxy="", data_dir=str(tmp_path)), config_path=tmp_path / "config.json", start_monitor=False)
+    app = create_app(
+        Config(proxy="", data_dir=str(tmp_path)), config_path=tmp_path / "config.json", start_monitor=False
+    )
     with TestClient(app) as client:
         store = app.state.monitor.store
         store.upsert_anime(Anime(id="bgm:1", title="新番", premiere="2026-10-01"))
-        store.ingest(Release(source="anibt", source_id="1", anime_id="bgm:1", group="好组",
-                             title="[好组] 新番 [01]"), Rules(), baseline=True)
+        store.ingest(
+            Release(source="anibt", source_id="1", anime_id="bgm:1", group="好组", title="[好组] 新番 [01]"),
+            Rules(),
+            baseline=True,
+        )
         assert client.get("/api/anime").json()["items"][0]["group_count"] == 1
         assert client.get("/api/anime/bgm:1/groups").json()["items"][0]["episodes"] == ["1"]
         assert client.get("/").status_code == 200

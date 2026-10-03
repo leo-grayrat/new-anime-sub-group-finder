@@ -1,4 +1,5 @@
 """Public site contracts, independently implemented from observed responses."""
+
 import re
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urljoin
@@ -18,6 +19,7 @@ def iso(value):
     value = str(value).strip()
     if "," in value:
         from email.utils import parsedate_to_datetime
+
         try:
             return parsedate_to_datetime(value).astimezone(timezone.utc).isoformat()
         except (ValueError, TypeError):
@@ -51,9 +53,14 @@ def parse_mikan_catalog(html, season, host):
         source_id = re.search(r"/Home/Bangumi/(\d+)", a["href"]).group(1)
         title = a.get_text(" ", strip=True)
         if title:
-            result[source_id] = Anime(id=f"mikan:{source_id}", title=title, aliases=[title],
-                                      sources={"mikan": source_id}, season_hint=season,
-                                      evidence=[f"蜜柑 {season} 放送列表"])
+            result[source_id] = Anime(
+                id=f"mikan:{source_id}",
+                title=title,
+                aliases=[title],
+                sources={"mikan": source_id},
+                season_hint=season,
+                evidence=[f"蜜柑 {season} 放送列表"],
+            )
     if not result:
         raise ValueError("蜜柑番剧列表结构缺失或被拦截，不能视为空列表")
     return list(result.values())
@@ -95,15 +102,29 @@ def parse_mikan_detail(html, anime, host):
             magnet = row.select_one("[data-clipboard-text]") or row.select_one("[data-magnet]")
             torrent = row.select_one('a[href*=".torrent"]')
             cells = row.select("td")
-            r = Release(source="mikan", source_id=link["href"].rstrip("/").split("/")[-1],
-                        title=link.get_text(" ", strip=True), anime_id=anime.id,
-                        group=title_group(link.get_text()) or label.get_text(strip=True),
-                        publisher=label.get_text(strip=True), url=urljoin(host, link["href"]),
-                        magnet=magnet.get("data-clipboard-text", magnet.get("data-magnet", "")) if magnet else "",
-                        torrent=urljoin(host, torrent["href"]) if torrent else "",
-                        rss=urljoin(host, rss["href"]) if rss else "",
-                        published_at=iso(cells[-1].get_text(strip=True)) if cells else "",
-                        raw={"row_text": row.get_text(" ", strip=True), "site_group": label.get_text(strip=True)})
+            r = Release(
+                source="mikan",
+                source_id=link["href"].rstrip("/").split("/")[-1],
+                title=link.get_text(" ", strip=True),
+                anime_id=anime.id,
+                group=title_group(link.get_text()) or label.get_text(strip=True),
+                publisher=label.get_text(strip=True),
+                url=urljoin(host, link["href"]),
+                magnet=magnet.get("data-clipboard-text", magnet.get("data-magnet", "")) if magnet else "",
+                torrent=urljoin(host, torrent["href"]) if torrent else "",
+                rss=urljoin(host, rss["href"]) if rss else "",
+                published_at=iso(
+                    next(
+                        (
+                            c.get_text(strip=True)
+                            for c in cells
+                            if re.search(r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}", c.get_text(strip=True))
+                        ),
+                        "",
+                    )
+                ),
+                raw={"row_text": row.get_text(" ", strip=True), "site_group": label.get_text(strip=True)},
+            )
             result.append(enrich(r))
     return anime, result
 
@@ -111,11 +132,18 @@ def parse_mikan_detail(html, anime, host):
 def parse_garden_catalog(data):
     if data.get("status") != "OK" or "subjects" not in data:
         raise ValueError("AnimeGarden 番剧目录返回异常")
-    return [Anime(id=f'bgm:{s["id"]}', bgm_id=int(s["id"]), title=s["name"],
-                  aliases=list(set([s["name"], *s.get("search", {}).get("include", [])])),
-                  premiere=s.get("activedAt", "")[:10] or None,
-                  sources={"garden": str(s["id"])}, evidence=["AnimeGarden 目录 activedAt，待 Bangumi 校验"])
-            for s in data["subjects"]]
+    return [
+        Anime(
+            id=f"bgm:{s['id']}",
+            bgm_id=int(s["id"]),
+            title=s["name"],
+            aliases=list(set([s["name"], *s.get("search", {}).get("include", [])])),
+            premiere=s.get("activedAt", "")[:10] or None,
+            sources={"garden": str(s["id"])},
+            evidence=["AnimeGarden 目录 activedAt，待 Bangumi 校验"],
+        )
+        for s in data["subjects"]
+    ]
 
 
 def parse_garden_resources(data, anime_id=None):
@@ -129,11 +157,24 @@ def parse_garden_resources(data, anime_id=None):
         publisher = item.get("publisher") or {}
         bgm_id = item.get("subjectId")
         group = title_group(item["title"]) or fansub.get("name", "")
-        r = Release(source="garden", source_id=str(item["id"]), title=item["title"],
-                    anime_id=anime_id or (f"bgm:{bgm_id}" if bgm_id else None), group=group,
-                    publisher=publisher.get("name", ""), magnet=item.get("magnet", ""),
-                    url=item.get("href", ""), published_at=iso(item.get("createdAt")), raw=item,
-                    rss="https://api.animes.garden/feed.xml?" + urlencode({"subject": bgm_id or (anime_id or "").removeprefix("bgm:"), "fansub": fansub["name"]}) if fansub.get("name") and (bgm_id or anime_id) else "")
+        r = Release(
+            source="garden",
+            source_id=str(item["id"]),
+            title=item["title"],
+            anime_id=anime_id or (f"bgm:{bgm_id}" if bgm_id else None),
+            group=group,
+            publisher=publisher.get("name", ""),
+            magnet=item.get("magnet", ""),
+            url=item.get("href", ""),
+            published_at=iso(item.get("createdAt")),
+            raw=item,
+            rss="https://api.animes.garden/feed.xml?"
+            + urlencode(
+                {"subject": bgm_id or (anime_id or "").removeprefix("bgm:"), "fansub": fansub["name"]}
+            )
+            if fansub.get("name") and (bgm_id or anime_id)
+            else "",
+        )
         result.append(enrich(r))
     return result
 
@@ -141,14 +182,22 @@ def parse_garden_resources(data, anime_id=None):
 def parse_anibt_catalog(data, season):
     if not data.get("ok") or "byWeekday" not in data.get("data", {}):
         raise ValueError("AniBT 季度目录返回异常")
-    return [Anime(id=f'bgm:{a["bgmId"]}', bgm_id=int(a["bgmId"]),
-                  title=a["title"].get("chinese") or a["title"]["primary"],
-                  aliases=list(set(v for v in a["title"].values() if isinstance(v, str) and v)),
-                  premiere=a.get("premiereDate"), season_hint=season,
-                  total_episodes=a.get("episodes"), sources={"anibt": str(a["bgmId"])},
-                  evidence=[f"AniBT {season} 季度目录"])
-            for weekday in data["data"]["byWeekday"] for a in weekday["animes"]
-            if a.get("format", "TV") in ["TV", "ONA", "WEB", "TV_SHORT"]]
+    return [
+        Anime(
+            id=f"bgm:{a['bgmId']}",
+            bgm_id=int(a["bgmId"]),
+            title=a["title"].get("chinese") or a["title"]["primary"],
+            aliases=list(set(v for v in a["title"].values() if isinstance(v, str) and v)),
+            premiere=a.get("premiereDate"),
+            season_hint=season,
+            total_episodes=a.get("episodes"),
+            sources={"anibt": str(a["bgmId"])},
+            evidence=[f"AniBT {season} 季度目录"],
+        )
+        for weekday in data["data"]["byWeekday"]
+        for a in weekday["animes"]
+        if a.get("format", "TV") in ["TV", "ONA", "WEB", "TV_SHORT"]
+    ]
 
 
 def parse_anibt_groups(data):
@@ -158,14 +207,25 @@ def parse_anibt_groups(data):
     bgm_id = data["data"]["bgmId"]
     for g in data["data"]["groups"]:
         for item in g.get("items", []):
-            r = Release(source="anibt", source_id=item["releaseId"], title=item["title"],
-                        anime_id=f"bgm:{bgm_id}", group=title_group(item["title"]) or g["name"],
-                        publisher=g["name"], url=f'https://anibt.net/release/{item["releaseId"]}',
-                        magnet=item.get("magnet", ""), torrent=f'https://anibt.net/api/torrent/{item["releaseId"]}.torrent',
-                        rss="https://anibt.net/rss/anime.xml?" + urlencode({"bgmId": bgm_id, "groupSlug": g["slug"]}),
-                        published_at=iso(item.get("publishedAt")), episode_key=item.get("episodeKey", ""),
-                        resolution=item.get("resolution", ""), languages=item.get("language", []),
-                        subtitle=item.get("subtitle", ""), tags=item.get("customTags", []), raw={"item": item, "group": g["name"]})
+            r = Release(
+                source="anibt",
+                source_id=item["releaseId"],
+                title=item["title"],
+                anime_id=f"bgm:{bgm_id}",
+                group=title_group(item["title"]) or g["name"],
+                publisher=g["name"],
+                url=f"https://anibt.net/release/{item['releaseId']}",
+                magnet=item.get("magnet", ""),
+                torrent=f"https://anibt.net/api/torrent/{item['releaseId']}.torrent",
+                rss="https://anibt.net/rss/anime.xml?" + urlencode({"bgmId": bgm_id, "groupSlug": g["slug"]}),
+                published_at=iso(item.get("publishedAt")),
+                episode_key=item.get("episodeKey", ""),
+                resolution=item.get("resolution", ""),
+                languages=item.get("language", []),
+                subtitle=item.get("subtitle", ""),
+                tags=item.get("customTags", []),
+                raw={"item": item, "group": g["name"]},
+            )
             result.append(enrich(r))
     return result
 
@@ -181,24 +241,49 @@ def parse_feed(content, source, anime_id=None):
         if source == "anibt" and entry.get("anibt_type", "anime") != "anime":
             continue
         url = entry.get("link", "")
-        torrent = next((e.get("href", "") for e in entry.get("enclosures", []) if e.get("type") == "application/x-bittorrent"), "")
+        torrent = next(
+            (
+                e.get("href", "")
+                for e in entry.get("enclosures", [])
+                if e.get("type") == "application/x-bittorrent"
+            ),
+            "",
+        )
         source_id = entry.get("anibt_releaseid") if source == "anibt" else url.rstrip("/").split("/")[-1]
         bgm_id = entry.get("anibt_bgmid")
         text = entry.get("summary", "")
         magnets = re.findall(r'magnet:\?[^\s<>"\']+', text)
         # feedparser stores some namespaced magnet fields as plain strings.
-        magnet = entry.get("magnet", "") or entry.get("torrent_magneturi", "") or (magnets[0] if magnets else "")
+        magnet = (
+            entry.get("magnet", "") or entry.get("torrent_magneturi", "") or (magnets[0] if magnets else "")
+        )
         if not magnet and source == "mikan" and re.fullmatch(r"[0-9a-fA-F]{40}", source_id or ""):
             magnet = "magnet:?xt=urn:btih:" + source_id
         if not magnet and source == "anibt":
             raw_m = entry.get("anibt_magnet", "") or entry.get("anibt_magneturi", "")
             magnet = raw_m
-        r = Release(source=source, source_id=source_id or entry.get("id", url), title=entry.get("title", ""),
-                    anime_id=anime_id or (f"bgm:{bgm_id}" if bgm_id else None),
-                    group=title_group(entry.get("title", "")) or entry.get("anibt_groupname", ""),
-                    publisher=entry.get("anibt_groupname", ""), url=url, torrent=torrent, magnet=magnet,
-                    episode_key=entry.get("anibt_episodekey", ""), published_at=iso(entry.get("published", "")),
-                    resolution=entry.get("anibt_resolution", ""), subtitle=entry.get("anibt_subtitle", ""),
-                    raw={k: v for k, v in entry.items() if k not in ["summary_detail", "title_detail", "published_parsed"]})
+            infohash = entry.get("infohash", "")
+            if not magnet and re.fullmatch(r"[0-9a-fA-F]{40}", infohash):
+                magnet = "magnet:?xt=urn:btih:" + infohash.lower()
+        r = Release(
+            source=source,
+            source_id=source_id or entry.get("id", url),
+            title=entry.get("title", ""),
+            anime_id=anime_id or (f"bgm:{bgm_id}" if bgm_id else None),
+            group=title_group(entry.get("title", "")) or entry.get("anibt_groupname", ""),
+            publisher=entry.get("anibt_groupname", ""),
+            url=url,
+            torrent=torrent,
+            magnet=magnet,
+            episode_key=entry.get("anibt_episodekey", ""),
+            published_at=iso(entry.get("published", "")),
+            resolution=entry.get("anibt_resolution", ""),
+            subtitle=entry.get("anibt_subtitle", ""),
+            raw={
+                k: v
+                for k, v in entry.items()
+                if k not in ["summary_detail", "title_detail", "published_parsed"]
+            },
+        )
         result.append(enrich(r))
     return result

@@ -8,9 +8,15 @@ from .models import Anime, Release
 
 DEFAULT_GROUPS = ["ANi", "黒ネズミたち", "Kirara Fantasia", "Nix-Raws", "ToonsHub", "Ansgwrt", "沸班亚马"]
 DEFAULT_PLATFORMS = ["CR", "Crunchyroll", "Baha", "Bahamut", "巴哈", "巴哈姆特", "CATCHPLAY", "CATCHPLAY+"]
-GROUP_ALIASES = {"nix-raw": "nix-raws", "nix raws": "nix-raws", "nixraws": "nix-raws",
-                 "nixraw": "nix-raws", "kirara-fantasia": "kirara fantasia",
-                 "kitaujisub": "北宇治字幕组", "kitauji sub": "北宇治字幕组"}
+GROUP_ALIASES = {
+    "nix-raw": "nix-raws",
+    "nix raws": "nix-raws",
+    "nixraws": "nix-raws",
+    "nixraw": "nix-raws",
+    "kirara-fantasia": "kirara fantasia",
+    "kitaujisub": "北宇治字幕组",
+    "kitauji sub": "北宇治字幕组",
+}
 
 
 def group_key(text: str) -> str:
@@ -45,9 +51,12 @@ def episodes(title: str, explicit: str = "") -> list[str]:
     if explicit:
         match = re.fullmatch(r"(\d{1,4}(?:\.\d+)?)(?:\s*[-~–]\s*(\d{1,4}))?(?:v\d+)?", explicit.strip(), re.I)
     if not match:
-        for pat in [r"S\d{1,2}E(\d{1,4})(?:v\d+)?", r"[\[【]\s*(\d{1,3}(?:\.\d+)?)\s*(?:[-~–]\s*(\d{1,3}))?(?:v\d+)?(?:\s*(?:END|完))?\s*[\]】]",
-                    r"\s-\s*(\d{1,3}(?:\.\d+)?)(?:\s*[-~]\s*(\d{1,3}))?(?:v\d+)?(?=\s|[\[.(]|$)",
-                    r"第\s*(\d{1,3})\s*[话話集]"]:
+        for pat in [
+            r"S\d{1,2}E(\d{1,4})(?:v\d+)?",
+            r"[\[【]\s*(\d{1,3}(?:\.\d+)?)\s*(?:[-~–]\s*(\d{1,3}))?(?:v\d+)?(?:\s*(?:END|完))?\s*[\]】]",
+            r"\s-\s*(\d{1,3}(?:\.\d+)?)(?:\s*[-~]\s*(\d{1,3}))?(?:v\d+)?(?=\s|[\[.(]|$)",
+            r"第\s*(\d{1,3})\s*[话話集]",
+        ]:
             match = re.search(pat, title, re.I)
             if match:
                 break
@@ -66,7 +75,9 @@ def quarter_bounds(season: str) -> tuple[str, str]:
     if not re.fullmatch(r"\d{4}-(01|04|07|10)", season):
         raise ValueError("季度格式应为 YYYY-01、YYYY-04、YYYY-07 或 YYYY-10")
     year, month = map(int, season.split("-"))
-    return date(year, month, 1).isoformat(), date(year + (month == 10), month + 3 if month < 10 else 1, 1).isoformat()
+    return date(year, month, 1).isoformat(), date(
+        year + (month == 10), month + 3 if month < 10 else 1, 1
+    ).isoformat()
 
 
 def scope_for(anime: Anime, season: str) -> str:
@@ -93,6 +104,7 @@ def scope_for(anime: Anime, season: str) -> str:
 
 def current_quarter() -> str:
     from datetime import datetime, timedelta, timezone
+
     today = datetime.now(timezone(timedelta(hours=8)))
     return f"{today.year}-{((today.month - 1) // 3) * 3 + 1:02}"
 

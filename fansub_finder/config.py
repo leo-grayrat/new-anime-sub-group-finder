@@ -27,6 +27,7 @@ class Config(BaseModel):
     @classmethod
     def validate_url(cls, value):
         from urllib.parse import urlsplit
+
         if not value:
             return value
         u = urlsplit(value)

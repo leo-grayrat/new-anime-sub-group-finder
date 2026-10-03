@@ -8,9 +8,14 @@ import httpx
 
 class Network:
     def __init__(self, proxy, transport=None, retries=2, interval=None):
-        self.client = httpx.AsyncClient(proxy=proxy or None, transport=transport, trust_env=False,
-                                       timeout=httpx.Timeout(25, connect=8), follow_redirects=True,
-                                       headers={"User-Agent": "new-anime-sub-group-finder/0.1 (public catalog reader)"})
+        self.client = httpx.AsyncClient(
+            proxy=proxy or None,
+            transport=transport,
+            trust_env=False,
+            timeout=httpx.Timeout(25, connect=8),
+            follow_redirects=True,
+            headers={"User-Agent": "new-anime-sub-group-finder/0.1 (public catalog reader)"},
+        )
         self.retries = retries
         self.interval = interval
         self.locks = {}
@@ -58,10 +63,14 @@ class Network:
                             self.cache.popitem(last=False)
                     return r.text
                 except (httpx.TransportError, httpx.HTTPStatusError) as error:
-                    retryable = not isinstance(error, httpx.HTTPStatusError) or error.response.status_code == 429 or error.response.status_code >= 500
+                    retryable = (
+                        not isinstance(error, httpx.HTTPStatusError)
+                        or error.response.status_code == 429
+                        or error.response.status_code >= 500
+                    )
                     if attempt >= self.retries or not retryable:
                         raise
-                    delay = 2 ** attempt
+                    delay = 2**attempt
                     if isinstance(error, httpx.HTTPStatusError):
                         retry = error.response.headers.get("retry-after", "")
                         if retry.isdigit():
@@ -70,4 +79,5 @@ class Network:
 
     async def json(self, url, params=None):
         import json
+
         return json.loads(await self.text(url, params))

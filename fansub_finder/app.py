@@ -26,7 +26,9 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
     store = Store(Path(config.data_dir) / "finder.sqlite")
     monitor = Monitor(config, store)
     query = QueryService(monitor)
-    mcp = create_mcp(lambda name, params: query.status() if name == "get_status" else getattr(query, name)(**params))
+    mcp = create_mcp(
+        lambda name, params: query.status() if name == "get_status" else getattr(query, name)(**params)
+    )
     mcp_app = mcp.streamable_http_app()
 
     @asynccontextmanager
@@ -61,9 +63,13 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
         return query.status()
 
     @app.get("/api/anime")
-    async def list_anime(season: str | None = None, include_continuing: bool = True, keyword: str = "",
-                         scope: Literal["active", "current", "continuing", "uncertain", "excluded", "all"] = "active",
-                         has_groups: bool = False):
+    async def list_anime(
+        season: str | None = None,
+        include_continuing: bool = True,
+        keyword: str = "",
+        scope: Literal["active", "current", "continuing", "uncertain", "excluded", "all"] = "active",
+        has_groups: bool = False,
+    ):
         try:
             return query.list_anime(season, include_continuing, keyword, scope, has_groups)
         except ValueError as e:
@@ -128,11 +134,13 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
                 await monitor.task
             except asyncio.CancelledError:
                 pass
+
         async def run_then_loop():
             await monitor.scan(full=full)
             while True:
                 await asyncio.sleep(monitor.config.poll_minutes * 60)
                 await monitor.scan()
+
         monitor.task = asyncio.create_task(run_then_loop())
         return {"started": True}
 
