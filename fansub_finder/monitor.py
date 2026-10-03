@@ -54,7 +54,9 @@ def enrich_bgm(a, subject, ep_data):
     dated = [
         ep for ep in ep_data.get("data", []) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", ep.get("airdate", ""))
     ]
-    a.episode_dates = sorted(set(a.episode_dates + [e["airdate"] for e in dated]))
+    a.episode_dates = sorted(e["airdate"] for e in dated)
+    a.schedule_checked_at = now()
+    a.end_date = None
     # Only a known final episode establishes an end date; never estimate by upload dates.
     if a.total_episodes:
         final = [e for e in dated if e.get("sort") == a.total_episodes]
@@ -69,6 +71,8 @@ class Monitor:
         self.store = store
         self.net = Network(config.proxy)
         self.lock = asyncio.Lock()
+        self.scheduler_lock = asyncio.Lock()
+        self.scan_requested = False
         self.task = None
         self.progress = {"running": False, "message": "等待首次采集"}
 
@@ -188,7 +192,10 @@ class Monitor:
                     evidence=["Bangumi 当前放送日历"],
                 )
                 self.store.upsert_anime(a)
-        candidates = self.relevant()
+        candidates = {a.id: a for a in self.relevant()}
+        # Current calendar also identifies long-running works for historical quarter checks.
+        candidates.update({a.id: a for a in self.store.animes() if a.on_air})
+        candidates = list(candidates.values())
         errors = []
         for i, a in enumerate(candidates):
             if not a.bgm_id:
@@ -199,6 +206,22 @@ class Monitor:
                 ep_data = await self.net.json(
                     "https://api.bgm.tv/v0/episodes", {"subject_id": a.bgm_id, "type": 0, "limit": 100}
                 )
+                total = ep_data.get("total", len(ep_data.get("data", [])))
+                collected = list(ep_data.get("data", []))
+                for offset in range(100, total, 100):
+                    page = await self.net.json(
+                        "https://api.bgm.tv/v0/episodes",
+                        {
+                            "subject_id": a.bgm_id,
+                            "type": 0,
+                            "limit": 100,
+                            "offset": offset,
+                        },
+                    )
+                    if not page.get("data"):
+                        raise ValueError("正片单集分页提前结束")
+                    collected.extend(page["data"])
+                ep_data["data"] = collected
                 enrich_bgm(a, subject, ep_data)
                 self.store.upsert_anime(a)
             except Exception as e:

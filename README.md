@@ -49,15 +49,15 @@ cwd = "E:\\Project\\Git\\Tool\\new-anime-sub-group-finder"
 
 stdio 只查询已启动的常驻服务，不另外扫描站点。未启动服务会返回明确错误。不要同时为同一项目配置 HTTP 与 stdio 两个入口。
 
-可询问：“十月新番有哪些可用字幕组？”“最近新增了哪些组？”“某组做到了第几集？”“蜜柑的数据是否过期？”工具为 `list_anime`、`list_groups`、`list_releases`、`list_changes`、`get_status`，均为只读。新增查询返回 `cursor`，下次传入 `after` 增量读取。时间采用 ISO 8601，网页显示本地时间。
+可询问：“十月新番有哪些可用字幕组？”“最近新增了哪些组？”“某组做到了第几集？”“蜜柑的数据是否过期？”工具为 `list_anime`、`list_groups`、`list_releases`、`list_changes`、`get_status`，均为只读。新增查询返回 `cursor`，下次传入 `after` 增量读取；`has_more=true` 时继续读取下一页，游标只推进到已检查的记录。时间采用 ISO 8601，网页显示本地时间。
 
 ## Docker
 
-先将 `config.example.json` 复制为 `config.json`，然后 `docker compose up -d --build`。默认宿主机仅暴露本机端口。
+运行 `docker compose up -d --build`。默认宿主机仅暴露本机端口，配置和数据库均保存在挂载的 `data` 目录。需要预置配置时，创建 `data` 目录并将 `config.example.json` 复制为 `data/config.json`；也可以启动后在网页设置中保存。
 
 容器默认直连，不能使用容器自己的 `127.0.0.1:7897` 访问宿主机 Clash。如需代理，在 Compose 环境设置 `FANSUB_PROXY=http://host.docker.internal:7897`（Docker Desktop），并确保该代理监听可从容器访问的地址；不要修改本机现有设置来迁就程序。Linux 环境应填写容器可访问的实际代理地址。
 
-SQLite 数据在 `data/finder.sqlite`，停服务后备份整个 `data` 目录即可。持久化配置挂载于 `/app/config.json`。
+SQLite 数据在 `data/finder.sqlite`，停服务后备份整个 `data` 目录即可。容器持久化配置位于 `/app/data/config.json`，目录挂载支持设置文件的原子保存。
 
 ## 开发与验证
 

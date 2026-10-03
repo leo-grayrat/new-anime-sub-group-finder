@@ -66,3 +66,14 @@ def test_empty_challenge_page_is_not_empty_catalog():
 
     with pytest.raises(ValueError):
         parse_mikan_catalog("<html>Access denied</html>", "2026-10", "https://mikanani.me")
+
+
+def test_optional_api_fields_can_be_null():
+    data = json.loads(read("anibt-groups.json"))
+    item = data["data"]["groups"][0]["items"][0]
+    for field in ["magnet", "episodeKey", "resolution", "language", "subtitle", "customTags"]:
+        item[field] = None
+    releases = parse_anibt_groups(data)
+    assert releases[0].title
+    garden = {"resources": [{"id": 1, "title": "[好组] 番剧 - 01", "magnet": None, "href": None}]}
+    assert parse_garden_resources(garden)[0].magnet == ""

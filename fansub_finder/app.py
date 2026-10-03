@@ -125,24 +125,27 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
 
     @app.post("/api/scan")
     async def scan(full: bool = False):
-        if monitor.lock.locked():
-            return {"started": False, "message": "已有采集任务在运行"}
-        # If sleeping, replace the scheduler rather than creating a second collector.
-        if monitor.task:
-            monitor.task.cancel()
-            try:
-                await monitor.task
-            except asyncio.CancelledError:
-                pass
+        async with monitor.scheduler_lock:
+            if monitor.scan_requested or monitor.lock.locked():
+                return {"started": False, "message": "已有采集任务在运行"}
+            monitor.scan_requested = True
+            if monitor.task:
+                monitor.task.cancel()
+                try:
+                    await monitor.task
+                except asyncio.CancelledError:
+                    pass
 
-        async def run_then_loop():
-            await monitor.scan(full=full)
-            while True:
+            async def run_then_loop():
+                try:
+                    await monitor.scan(full=full)
+                finally:
+                    monitor.scan_requested = False
                 await asyncio.sleep(monitor.config.poll_minutes * 60)
-                await monitor.scan()
+                await monitor.loop()
 
-        monitor.task = asyncio.create_task(run_then_loop())
-        return {"started": True}
+            monitor.task = asyncio.create_task(run_then_loop())
+            return {"started": True}
 
     app.mount("/static", StaticFiles(directory=static), name="static")
     app.mount("/", mcp_app)

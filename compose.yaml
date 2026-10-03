@@ -6,7 +6,7 @@ services:
       - "127.0.0.1:18765:18765"
     volumes:
       - ./data:/app/data
-      - ./config.json:/app/config.json
+    command: ["/app/.venv/bin/python", "-m", "fansub_finder", "serve", "--host", "0.0.0.0", "--port", "18765", "--config", "/app/data/config.json"]
     environment:
       # Set to an address reachable FROM the container when a proxy is needed.
       # Example with Docker Desktop: http://host.docker.internal:7897

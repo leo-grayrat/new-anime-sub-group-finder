@@ -9,6 +9,7 @@ class Anime(BaseModel):
     premiere: str | None = None
     end_date: str | None = None
     episode_dates: list[str] = Field(default_factory=list)
+    schedule_checked_at: str | None = None
     on_air: bool = False
     season_hint: str | None = None
     total_episodes: int | None = None

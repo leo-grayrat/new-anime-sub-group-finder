@@ -69,11 +69,19 @@ class QueryService:
     def list_changes(self, after=0, since=None, season=None):
         result = []
         season = season or self.monitor.config.season
-        for change in self.store.changes(after, since):
+        page = self.store.changes(after, since)
+        for change in page:
             a = self.store.anime(change["anime_id"])
             if a and scope_for(a, season) in ["current", "continuing"]:
                 g = next((g for g in self.store.groups(a.id) if g["id"] == change["group_id"]), None)
                 if g:
                     result.append({**change, "anime_title": a.title, "episodes": g["episodes"]})
-        cursor = self.store.db.execute("SELECT COALESCE(MAX(id),0) FROM changes").fetchone()[0]
-        return {**self.envelope(result), "cursor": cursor}
+        cursor = page[-1]["id"] if page else after
+        has_more = (
+            self.store.db.execute(
+                "SELECT 1 FROM changes WHERE id>? AND (? IS NULL OR discovered_at>?) LIMIT 1",
+                (cursor, since, since),
+            ).fetchone()
+            is not None
+        )
+        return {**self.envelope(result), "cursor": cursor, "has_more": has_more}

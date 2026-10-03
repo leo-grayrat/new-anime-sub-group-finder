@@ -113,3 +113,25 @@ def test_sparse_feed_does_not_erase_publisher_or_rss(tmp_path):
     assert len(rows) == 1
     assert rows[0]["publisher"] == "Kirara Fantasia"
     assert rows[0]["rss"] == "https://example.com/feed"
+
+
+def test_identical_torrent_combines_blocking_evidence_across_sources(tmp_path):
+    store = Store(tmp_path / "db.sqlite")
+    a = release(magnet="magnet:?xt=urn:btih:" + "e" * 40)
+    store.ingest(a.model_copy(update={"tags": ["CR"]}), Rules(), baseline=True)
+    store.ingest(a.model_copy(update={"source": "garden"}), Rules(), baseline=True)
+    assert store.releases() == []
+    blocked = store.releases(blocked=True)
+    assert len(blocked) == 1 and len(blocked[0]["origins"]) == 2
+
+
+def test_sparse_feed_without_signature_keeps_existing_group(tmp_path):
+    store = Store(tmp_path / "db.sqlite")
+    store.upsert_anime(Anime(id="bgm:123", title="测试", premiere="2026-10-01"))
+    a = release(publisher="好组")
+    a.title = "测试 - 01 1080p"
+    a.group = "好组"
+    store.ingest(a, Rules(), baseline=True)
+    store.ingest(a.model_copy(update={"group": "未署名", "publisher": ""}), Rules(), baseline=False)
+    assert store.groups("bgm:123")[0]["name"] == "好组"
+    assert store.changes() == []

@@ -51,7 +51,10 @@ class Store:
             old.aliases = sorted(set(old.aliases + anime.aliases + [old.title, anime.title]))
             old.sources.update(anime.sources)
             old.evidence = sorted(set(old.evidence + anime.evidence))
-            old.episode_dates = sorted(set(old.episode_dates + anime.episode_dates))
+            if anime.schedule_checked_at:
+                old.episode_dates = anime.episode_dates
+                old.end_date = anime.end_date
+                old.schedule_checked_at = anime.schedule_checked_at
             old.on_air = old.on_air or anime.on_air
             for key in ["premiere", "end_date", "bgm_id", "season_hint", "total_episodes"]:
                 if getattr(anime, key) is not None:
@@ -105,6 +108,8 @@ class Store:
         if old:
             previous = Release.model_validate_json(old[0])
             r = r.model_copy(deep=True)
+            if r.group in ["", "未署名"] and previous.group not in ["", "未署名"]:
+                r.group = previous.group
             for field in [
                 "publisher",
                 "rss",
@@ -131,6 +136,10 @@ class Store:
               data=excluded.data,reasons=excluded.reasons""",
                 (r.source, r.source_id, resource_id, r.model_dump_json(), dump(reasons), ts),
             )
+            combined_reasons = any(
+                json.loads(row[0])
+                for row in self.db.execute("SELECT reasons FROM origins WHERE resource_id=?", (resource_id,))
+            )
             if r.anime_id:
                 key = group_key(r.group)
                 inserted = self.db.execute(
@@ -140,7 +149,7 @@ class Store:
                 if (
                     inserted
                     and not baseline
-                    and not reasons
+                    and not combined_reasons
                     and a
                     and scope_for(a, season) in ["current", "continuing"]
                 ):
@@ -163,23 +172,22 @@ class Store:
 
     def releases(self, anime_id=None, group=None, blocked=False, unmatched=False):
         result = {}
-        clauses = ["reasons != '[]'" if blocked else "reasons = '[]'"]
+        clauses = []
         values = []
         if anime_id:
             clauses.append("json_extract(data,'$.anime_id') = ?")
             values.append(anime_id)
         if unmatched:
             clauses.append("json_extract(data,'$.anime_id') IS NULL")
-        sql = "SELECT * FROM origins WHERE " + " AND ".join(clauses) + " ORDER BY first_seen DESC"
+        where = (
+            " WHERE resource_id IN (SELECT resource_id FROM origins WHERE " + " AND ".join(clauses) + ")"
+            if clauses
+            else ""
+        )
+        sql = "SELECT * FROM origins" + where + " ORDER BY first_seen DESC"
         for row in self.db.execute(sql, values):
             r = Release.model_validate_json(row["data"])
             reasons = json.loads(row["reasons"])
-            if (anime_id and r.anime_id != anime_id) or (group and group_key(r.group) != group_key(group)):
-                continue
-            if unmatched and r.anime_id:
-                continue
-            if blocked != bool(reasons):
-                continue
             origin = {
                 "source": r.source,
                 "source_id": r.source_id,
@@ -190,7 +198,20 @@ class Store:
             }
             key = row["resource_id"]
             if key in result:
-                result[key]["origins"].append(origin)
+                current = result[key]
+                current["origins"].append(origin)
+                current["reasons"] = sorted(set(current["reasons"] + reasons))
+                current["episodes"] = sorted(
+                    set(current["episodes"] + episodes(r.title, r.episode_key)), key=float
+                )
+                current["languages"] = sorted(set(current["languages"] + r.languages))
+                if not current["anime_id"] and r.anime_id:
+                    current["anime_id"] = r.anime_id
+                if current["group"] in ["", "未署名"] and r.group not in ["", "未署名"]:
+                    current["group"] = r.group
+                for field in ["magnet", "resolution", "published_at"]:
+                    if not current[field]:
+                        current[field] = getattr(r, field)
                 continue
             result[key] = {
                 **r.model_dump(exclude={"raw"}),
@@ -200,7 +221,14 @@ class Store:
                 "reasons": reasons,
                 "origins": [origin],
             }
-        return list(result.values())
+        return [
+            r
+            for r in result.values()
+            if bool(r["reasons"]) == blocked
+            and (not anime_id or r["anime_id"] == anime_id)
+            and (not group or group_key(r["group"]) == group_key(group))
+            and (not unmatched or not r["anime_id"])
+        ]
 
     def groups(self, anime_id):
         groups = {}
@@ -233,7 +261,7 @@ class Store:
         return [
             dict(row)
             for row in self.db.execute(
-                "SELECT * FROM changes WHERE id>? AND (? IS NULL OR discovered_at>?) ORDER BY id DESC LIMIT 500",
+                "SELECT * FROM changes WHERE id>? AND (? IS NULL OR discovered_at>?) ORDER BY id ASC LIMIT 500",
                 (after, since, since),
             )
         ]
