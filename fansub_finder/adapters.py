@@ -16,6 +16,14 @@ def iso(value):
     if not value:
         return ""
     value = str(value).strip()
+    if "," in value:
+        from email.utils import parsedate_to_datetime
+        try:
+            return parsedate_to_datetime(value).astimezone(timezone.utc).isoformat()
+        except (ValueError, TypeError):
+            pass
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", value):
+        return value + "+08:00"
     for fmt in ["%m/%d/%Y %H:%M", "%m/%d/%Y %H:%M:%S", "%m/%d/%Y", "%Y/%m/%d %H:%M"]:
         try:
             return datetime.strptime(value, fmt).isoformat() + "+08:00"
