@@ -32,14 +32,27 @@ async def main():
         assert any(link.startswith("magnet:") for link in links)
         assert any(link.startswith("https:") for link in links)
         await page.screenshot(path=str(output / "anime.png"), full_page=True)
-        for name in ["changes", "blocked", "unmatched", "settings"]:
+        headings = {
+            "changes": "新增字幕组",
+            "blocked": "已屏蔽记录",
+            "unmatched": "未匹配资源",
+            "settings": "设置",
+        }
+        for name, heading in headings.items():
             await page.locator(f'nav button[data-page="{name}"]').click()
-            await page.locator("#content h2").wait_for()
+            await page.get_by_role("heading", name=heading, exact=True).wait_for()
             if name == "settings":
                 await page.locator("#platforms").wait_for()
                 assert "CATCHPLAY" in await page.locator("#platforms").input_value()
                 assert "7897" in await page.locator("#proxy").input_value()
                 await page.screenshot(path=str(output / "settings.png"), full_page=True)
+        await page.set_viewport_size({"width": 390, "height": 844})
+        await page.locator('nav button[data-page="anime"]').click()
+        await page.locator("details.anime").first.wait_for()
+        assert await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), (
+            "移动布局超出视口"
+        )
+        await page.screenshot(path=str(output / "mobile.png"), full_page=True)
         assert not errors, errors
         print(
             json.dumps(

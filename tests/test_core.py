@@ -140,3 +140,23 @@ def test_sparse_feed_without_signature_keeps_existing_group(tmp_path):
 def test_site_fansub_and_additional_title_signature_cannot_bypass_blacklist():
     assert Rules().check(release(publisher="搬运", raw={"fansub": {"name": "ANi"}}))
     assert Rules().check(release().model_copy(update={"title": "[好组][ANi] 测试番 - 01"}))
+
+
+def test_mapping_upgrade_keeps_manual_scope_and_source_identity(tmp_path):
+    store = Store(tmp_path / "db.sqlite")
+    store.upsert_anime(Anime(id="mikan:10", title="测试番", sources={"mikan": "10"}, override="excluded"))
+    store.upsert_anime(Anime(id="bgm:123", title="测试番", bgm_id=123))
+    store.merge_anime_id("mikan:10", "bgm:123")
+    assert store.anime("bgm:123").override == "excluded"
+    assert store.anime("bgm:123").sources["mikan"] == "10"
+
+
+def test_same_hash_does_not_merge_unmapped_group_names(tmp_path):
+    store = Store(tmp_path / "db.sqlite")
+    a = release(magnet="magnet:?xt=urn:btih:" + "f" * 40)
+    b = a.model_copy(update={"source": "garden", "group": "另一署名"})
+    store.ingest(a, Rules(), baseline=True)
+    store.ingest(b, Rules(), baseline=True)
+    assert len(store.releases("bgm:123")) == 1
+    assert {g["name"] for g in store.groups("bgm:123")} == {a.group, b.group}
+    assert len(store.releases("bgm:123", group=a.group)) == 1

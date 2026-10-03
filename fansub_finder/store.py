@@ -26,6 +26,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS origins(source TEXT, source_id TEXT, resource_id TEXT, data TEXT, reasons TEXT,
           first_seen TEXT, PRIMARY KEY(source,source_id));
         CREATE INDEX IF NOT EXISTS origin_resource ON origins(resource_id);
+        CREATE INDEX IF NOT EXISTS origin_anime ON origins(json_extract(data,'$.anime_id'));
         CREATE TABLE IF NOT EXISTS seen_groups(anime_id TEXT, group_id TEXT, first_seen TEXT,
           PRIMARY KEY(anime_id,group_id));
         CREATE TABLE IF NOT EXISTS changes(id INTEGER PRIMARY KEY AUTOINCREMENT, anime_id TEXT, group_id TEXT,
@@ -83,6 +84,20 @@ class Store:
     def merge_anime_id(self, old_id, new_id):
         if old_id == new_id:
             return
+        previous = self.anime(old_id)
+        target = self.anime(new_id)
+        if previous:
+            merged = target or previous.model_copy(update={"id": new_id})
+            if new_id.startswith("bgm:"):
+                merged.bgm_id = int(new_id.split(":", 1)[1])
+            merged.override = merged.override or previous.override
+            merged.aliases = sorted(set(merged.aliases + previous.aliases + [previous.title]))
+            merged.sources = {**previous.sources, **merged.sources}
+            merged.evidence = sorted(set(merged.evidence + previous.evidence))
+            self.upsert_anime(merged)
+            # upsert keeps an existing manual override; explicitly carry the old mapping's override.
+            if merged.override:
+                self.set_override(new_id, merged.override)
         with self.db:
             for row in self.db.execute("SELECT source,source_id,data FROM origins").fetchall():
                 r = Release.model_validate_json(row["data"])
@@ -211,6 +226,8 @@ class Store:
             origin = {
                 "source": r.source,
                 "source_id": r.source_id,
+                "group": r.group,
+                "anime_id": r.anime_id,
                 "url": r.url,
                 "torrent": r.torrent,
                 "rss": r.rss,
@@ -246,31 +263,36 @@ class Store:
             for r in result.values()
             if bool(r["reasons"]) == blocked
             and (not anime_id or r["anime_id"] == anime_id)
-            and (not group or group_key(r["group"]) == group_key(group))
+            and (not group or any(group_key(o["group"]) == group_key(group) for o in r["origins"]))
             and (not unmatched or not r["anime_id"])
         ]
 
     def groups(self, anime_id):
         groups = {}
         for r in self.releases(anime_id):
-            key = group_key(r["group"])
-            g = groups.setdefault(
-                key,
-                {
-                    "id": key,
-                    "name": r["group"],
-                    "episodes": set(),
-                    "sources": set(),
-                    "rss": set(),
-                    "last_published": "",
-                    "release_count": 0,
-                },
-            )
-            g["episodes"].update(r["episodes"])
-            g["sources"].update(o["source"] for o in r["origins"])
-            g["rss"].update(o["rss"] for o in r["origins"] if o["rss"])
-            g["last_published"] = max(g["last_published"], r["published_at"])
-            g["release_count"] += 1
+            counted = set()
+            for origin in r["origins"]:
+                key = group_key(origin["group"])
+                g = groups.setdefault(
+                    key,
+                    {
+                        "id": key,
+                        "name": origin["group"],
+                        "episodes": set(),
+                        "sources": set(),
+                        "rss": set(),
+                        "last_published": "",
+                        "release_count": 0,
+                    },
+                )
+                g["episodes"].update(r["episodes"])
+                g["sources"].add(origin["source"])
+                if origin["rss"]:
+                    g["rss"].add(origin["rss"])
+                g["last_published"] = max(g["last_published"], r["published_at"])
+                if key not in counted:
+                    g["release_count"] += 1
+                    counted.add(key)
         for g in groups.values():
             g["episodes"] = sorted(g["episodes"], key=float)
             g["sources"] = sorted(g["sources"])
