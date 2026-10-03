@@ -1,6 +1,8 @@
 import asyncio
 import time
 from collections import OrderedDict
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit
 
 import httpx
@@ -75,6 +77,14 @@ class Network:
                         retry = error.response.headers.get("retry-after", "")
                         if retry.isdigit():
                             delay = int(retry)
+                        elif retry:
+                            try:
+                                retry_at = parsedate_to_datetime(retry)
+                                if retry_at.tzinfo is None:
+                                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                                delay = max(0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+                            except (ValueError, TypeError, OverflowError):
+                                pass
                     await asyncio.sleep(delay)
 
     async def json(self, url, params=None):

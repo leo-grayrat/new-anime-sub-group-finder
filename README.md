@@ -11,6 +11,7 @@
 - 网页：<http://127.0.0.1:18765>
 - MCP：<http://127.0.0.1:18765/mcp>
 - 保持启动窗口运行即可持续采集；关闭窗口或按 Ctrl+C 停止。
+- 已有服务运行时，启动入口显示地址并退出。双击 `stop.cmd` 可停止本项目在默认端口的服务；它会先检查进程身份。
 - 默认季度为 `2026-10`，每10分钟采集，每6小时刷新放送目录，每日补查。首次补查可能需要几分钟，页面可先查看已取得的结果。
 
 `config.json` 是本机配置（不提交 Git），可复制 `config.example.json` 创建，也可在网页设置中编辑。默认代理为 `http://127.0.0.1:7897`；留空表示直连。所有远端请求使用这个配置，不依赖 Windows 系统代理。环境变量 `FANSUB_PROXY`、`FANSUB_DATA_DIR` 可覆盖文件中的值。
@@ -69,5 +70,7 @@ node --check fansub_finder/static/app.js
 ```
 
 `scripts/fetch_fixtures.py` 通过本机代理获取公开站点的小批量测试样本。`python -m fansub_finder scan --full` 用于单次完整补查（先停常驻服务）。
+
+常驻服务运行时，`scripts/smoke_mcp.py` 联调 HTTP 和 stdio 的五个工具；`scripts/smoke_web.py` 使用已安装的 Edge 进行无窗口浏览器验证，截图位于 `.cache/web-verification`，不会操作用户的浏览器窗口。
 
 站点适配器参考 [ani-rss](https://github.com/wushuo894/ani-rss) 的接口使用方式，解析代码在本项目独立实现。后台查询使用 [AniBT Open API](https://wiki.anibt.net/en/docs/open-api) 和 [AnimeGarden API](https://github.com/yjl9903/AnimeGarden)。不调用下载器，不发送外部消息。

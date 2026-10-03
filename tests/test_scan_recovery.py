@@ -24,6 +24,8 @@ async def test_failed_catalog_cannot_be_cleared_by_successful_recent_feed(tmp_pa
     await monitor.scan(full=True)
     assert store.get_state("status:mikan")["error"]
     assert not store.get_state("baseline:mikan", False)
+    assert store.get_state("baseline:garden", False)
+    assert store.get_state("baseline:anibt", False)
     await monitor.close()
 
 

@@ -1,3 +1,5 @@
+import httpx
+
 from fansub_finder.config import Config
 from fansub_finder.models import Anime, Release
 from fansub_finder.monitor import Monitor, enrich_bgm, match_anime
@@ -42,7 +44,7 @@ async def test_failed_source_keeps_previous_records_and_marks_error(tmp_path):
     )
 
     async def fail():
-        raise ValueError("模拟源站失败")
+        raise httpx.ReadTimeout("模拟源站请求超时")
 
     await monitor.run_source("mikan", fail)
     status = store.get_state("status:mikan")
