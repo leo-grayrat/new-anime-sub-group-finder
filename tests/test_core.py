@@ -135,3 +135,8 @@ def test_sparse_feed_without_signature_keeps_existing_group(tmp_path):
     store.ingest(a.model_copy(update={"group": "未署名", "publisher": ""}), Rules(), baseline=False)
     assert store.groups("bgm:123")[0]["name"] == "好组"
     assert store.changes() == []
+
+
+def test_site_fansub_and_additional_title_signature_cannot_bypass_blacklist():
+    assert Rules().check(release(publisher="搬运", raw={"fansub": {"name": "ANi"}}))
+    assert Rules().check(release().model_copy(update={"title": "[好组][ANi] 测试番 - 01"}))

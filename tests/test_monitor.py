@@ -1,5 +1,5 @@
 from fansub_finder.config import Config
-from fansub_finder.models import Anime
+from fansub_finder.models import Anime, Release
 from fansub_finder.monitor import Monitor, enrich_bgm, match_anime
 from fansub_finder.store import Store
 
@@ -35,6 +35,11 @@ async def test_failed_source_keeps_previous_records_and_marks_error(tmp_path):
     store = Store(tmp_path / "db.sqlite")
     monitor = Monitor(Config(proxy="", data_dir=str(tmp_path)), store)
     store.set_state("status:mikan", {"last_success": "2026-10-03T00:00:00+00:00"})
+    store.ingest(
+        Release(source="mikan", source_id="1", group="好组", title="[好组] 测试 - 01"),
+        monitor.rules,
+        baseline=True,
+    )
 
     async def fail():
         raise ValueError("模拟源站失败")
@@ -43,4 +48,5 @@ async def test_failed_source_keeps_previous_records_and_marks_error(tmp_path):
     status = store.get_state("status:mikan")
     assert status["last_success"] == "2026-10-03T00:00:00+00:00"
     assert status["error"] and status["phase"] == "error"
+    assert store.releases()[0]["title"] == "[好组] 测试 - 01"
     await monitor.close()

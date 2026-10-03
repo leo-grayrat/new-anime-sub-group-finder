@@ -19,7 +19,9 @@ class QueryService:
             status["stale"] = age is None or age > self.monitor.config.poll_minutes * 60 * 3
             if source == "bgm" and age is not None:
                 status["stale"] = age > self.monitor.config.catalog_hours * 3600 * 2
-            status["baseline_complete"] = self.store.get_state(f"baseline:{source}", False)
+            status["baseline_complete"] = (
+                bool(last) if source == "bgm" else self.store.get_state(f"baseline:{source}", False)
+            )
             statuses[source] = status
         return {
             "sources": statuses,

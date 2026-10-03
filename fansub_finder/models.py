@@ -35,4 +35,5 @@ class Release(BaseModel):
     resolution: str = ""
     subtitle: str = ""
     tags: list[str] = Field(default_factory=list)
+    site_groups: list[str] = Field(default_factory=list)
     raw: dict = Field(default_factory=dict)

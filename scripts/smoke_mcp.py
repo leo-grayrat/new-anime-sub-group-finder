@@ -1,4 +1,5 @@
 """Exercise the real HTTP and stdio MCP transports against a running service."""
+
 import asyncio
 import json
 import sys
@@ -40,10 +41,14 @@ async def verify(read, write, label):
 async def main():
     def factory(**kwargs):
         return httpx.AsyncClient(trust_env=False, **kwargs)
+
     async with streamablehttp_client(url + "/mcp", httpx_client_factory=factory) as (read, write, _):
         await verify(read, write, "HTTP MCP")
-    params = StdioServerParameters(command=sys.executable, args=["-m", "fansub_finder", "mcp", "--server", url],
-                                   cwd=str(Path(__file__).resolve().parents[1]))
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "fansub_finder", "mcp", "--server", url],
+        cwd=str(Path(__file__).resolve().parents[1]),
+    )
     async with stdio_client(params) as (read, write):
         await verify(read, write, "STDIO MCP")
 

@@ -13,7 +13,12 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "ruff>=0.9,<1"]
+dev = [
+    "playwright>=1.63.0",
+    "pytest>=8,<10",
+    "pytest-asyncio>=0.24,<2",
+    "ruff>=0.9,<1",
+]
 
 [project.scripts]
 fansub-finder = "fansub_finder.__main__:main"

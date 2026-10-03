@@ -37,3 +37,17 @@ def test_cross_origin_mutation_rejected(tmp_path):
     with TestClient(app) as client:
         response = client.post("/api/scan", headers={"Origin": "https://untrusted.example"})
         assert response.status_code == 403
+
+
+def test_restart_applies_configuration_to_persisted_resources(tmp_path):
+    config = Config(proxy="", data_dir=str(tmp_path))
+    first = create_app(config, start_monitor=False)
+    with TestClient(first):
+        first.state.monitor.store.ingest(
+            Release(source="mikan", source_id="1", title="[好组] 测试 - 01", group="好组"),
+            Rules(),
+            baseline=True,
+        )
+    second = create_app(config.model_copy(update={"groups": ["好组"]}), start_monitor=False)
+    with TestClient(second) as client:
+        assert len(client.get("/api/blocked").json()["items"]) == 1

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .models import Anime, Release
-from .rules import episodes, group_key, normalize_infohash, scope_for, title_group
+from .rules import episodes, group_key, normalize_infohash, scope_for, site_labels, title_group
 
 
 def now():
@@ -124,6 +124,7 @@ class Store:
                     setattr(r, field, getattr(previous, field))
             r.languages = sorted(set(previous.languages + r.languages))
             r.tags = sorted(set(previous.tags + r.tags))
+            r.site_groups = sorted(set(site_labels(previous) + site_labels(r)))
         if not r.group:
             r.group = title_group(r.title) or r.publisher or "未署名"
         reasons = rules.check(r)
@@ -160,6 +161,25 @@ class Store:
 
     def reclassify(self, rules):
         with self.db:
+            for row in self.db.execute("SELECT * FROM seen_groups").fetchall():
+                canonical = group_key(row["group_id"])
+                if canonical != row["group_id"]:
+                    self.db.execute(
+                        "INSERT OR IGNORE INTO seen_groups VALUES(?,?,?)",
+                        (row["anime_id"], canonical, row["first_seen"]),
+                    )
+                    self.db.execute(
+                        "DELETE FROM seen_groups WHERE anime_id=? AND group_id=?",
+                        (row["anime_id"], row["group_id"]),
+                    )
+                    self.db.execute(
+                        "UPDATE OR IGNORE changes SET group_id=? WHERE anime_id=? AND group_id=?",
+                        (canonical, row["anime_id"], row["group_id"]),
+                    )
+                    self.db.execute(
+                        "DELETE FROM changes WHERE anime_id=? AND group_id=?",
+                        (row["anime_id"], row["group_id"]),
+                    )
             for row in self.db.execute("SELECT source,source_id,data FROM origins").fetchall():
                 self.db.execute(
                     "UPDATE origins SET reasons=? WHERE source=? AND source_id=?",

@@ -16,6 +16,8 @@ GROUP_ALIASES = {
     "kirara-fantasia": "kirara fantasia",
     "kitaujisub": "北宇治字幕组",
     "kitauji sub": "北宇治字幕组",
+    "北宇治字幕組": "北宇治字幕组",
+    "終末字幕組": "终末字幕组",
 }
 
 
@@ -23,6 +25,17 @@ def group_key(text: str) -> str:
     key = unicodedata.normalize("NFKC", text).strip(" []【】").casefold()
     key = re.sub(r"\s+", " ", key)
     return GROUP_ALIASES.get(key, key)
+
+
+def site_labels(r: Release) -> list[str]:
+    labels = list(r.site_groups)
+    fansub = r.raw.get("fansub") or {}
+    if isinstance(fansub, dict) and fansub.get("name"):
+        labels.append(fansub["name"])
+    for key in ["site_group", "group"]:
+        if isinstance(r.raw.get(key), str):
+            labels.append(r.raw[key])
+    return labels
 
 
 def title_group(title: str) -> str:
@@ -116,7 +129,8 @@ class Rules:
 
     def check(self, r: Release) -> list[str]:
         reasons = []
-        labels = [r.group, r.publisher, title_group(r.title)]
+        labels = [r.group, r.publisher, *site_labels(r)]
+        labels += re.findall(r"[\[【]([^\]】]+)[\]】]", r.title)
         labels += [p.strip() for label in list(labels) for p in re.split(r"[&＆+×]|\s+[xX]\s+", label)]
         for banned in self.groups:
             if group_key(banned) in {group_key(x) for x in labels if x}:

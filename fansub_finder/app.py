@@ -25,6 +25,7 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
     config = config or load_config(config_path)
     store = Store(Path(config.data_dir) / "finder.sqlite")
     monitor = Monitor(config, store)
+    store.reclassify(monitor.rules)
     query = QueryService(monitor)
     mcp = create_mcp(
         lambda name, params: query.status() if name == "get_status" else getattr(query, name)(**params)
@@ -105,11 +106,11 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
     async def update_config(config: Config):
         if config.data_dir != monitor.config.data_dir:
             raise HTTPException(422, "运行期间不能更换数据目录；请修改配置后重启")
-        if monitor.lock.locked():
+        if monitor.lock.locked() or monitor.scan_requested:
             raise HTTPException(409, "正在采集，请等待本轮结束后保存设置")
         async with monitor.lock:
-            await monitor.net.close()
             save_config(config, config_path)
+            await monitor.net.close()
             monitor.config = config
             monitor.net = Network(config.proxy)
             store.reclassify(monitor.rules)
