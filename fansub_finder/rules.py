@@ -180,7 +180,8 @@ class Rules:
         for pending in self.review_groups:
             if group_key(pending) in {group_key(x) for x in labels if x}:
                 reasons.append(f"发布者待核实：{pending}（中文字幕制作来源未确认）")
-        text = " ".join([r.title, *r.tags, r.description])
+        release_text = " ".join([r.title, *r.tags])
+        text = " ".join([release_text, r.description])
         for tag in self.platforms:
             # ASCII token boundaries protect Crimson/Anima and accept CR_WEB-DL.
             pat = r"(?<![A-Za-z0-9])" + re.escape(tag) + r"(?![A-Za-z0-9])"
@@ -197,7 +198,20 @@ class Rules:
             r"官方字幕|官方中字|官字|official\s+(?:subtitles?|subs)\b", text, re.I
         ):
             reasons.append("明确标注官方字幕")
-        if r.subtitle.upper() == "NONE" or re.search(r"无字幕|無字幕|生肉|\bNO[ ._-]?SUBS?\b", text, re.I):
+        ai_translation = r"(?<![A-Za-z0-9])AI[ \t_-]*(?:翻[译譯]|translat(?:ed|ion)\b)"
+        ai_credit = re.search(
+            r"(?:^|\n)[ \t]*(?:翻译|翻譯|字幕(?:来源|來源)?|translation|subtitles?)"
+            r"[ \t]*[:：][ \t]*" + ai_translation,
+            r.description,
+            re.I,
+        )
+        if re.search(ai_translation, release_text, re.I) or ai_credit:
+            reasons.append("明确标注AI翻译")
+        # Recruitment and playback advice mention raw video without describing this release.
+        # Parsed subtitle-track declarations are already represented by subtitle=NONE.
+        if r.subtitle.upper() == "NONE" or re.search(
+            r"无字幕|無字幕|生肉|\bNO[ ._-]?SUBS?\b", release_text, re.I
+        ):
             reasons.append("明确无字幕")
         known = [lang for lang in r.languages if lang.upper() not in ["MULTI", "UND", "UNKNOWN"]]
         if known and not has_chinese(known):
