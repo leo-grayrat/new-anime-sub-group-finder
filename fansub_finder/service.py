@@ -143,6 +143,8 @@ class QueryService:
                     {
                         "anime_id": a.id,
                         "anime_title": a.title,
+                        "bgm_id": a.bgm_id,
+                        "cover_url": a.cover_url,
                         "group_id": group_id,
                         "group_name": name,
                         "updated_at": timestamp.isoformat(),

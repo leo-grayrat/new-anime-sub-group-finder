@@ -5,11 +5,12 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .config import Config, load_config, save_config
+from .covers import Covers
 from .mcp_server import create_mcp
 from .monitor import Monitor
 from .network import Network
@@ -27,6 +28,7 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
     monitor = Monitor(config, store)
     store.reclassify(monitor.rules)
     query = QueryService(monitor)
+    covers = Covers(monitor)
     mcp = create_mcp(
         lambda name, params: query.status() if name == "get_status" else getattr(query, name)(**params)
     )
@@ -82,6 +84,14 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
             return query.list_groups(anime_id, season)
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
+
+    @app.get("/api/anime/{anime_id}/cover")
+    async def cover(anime_id: str):
+        try:
+            data, media_type = await covers.get(anime_id)
+        except Exception as e:
+            raise HTTPException(404, "封面暂不可用") from e
+        return Response(data, media_type=media_type, headers={"Cache-Control": "public, max-age=86400"})
 
     @app.get("/api/anime/{anime_id}/releases")
     async def releases(anime_id: str, group: str | None = None, season: str | None = None):

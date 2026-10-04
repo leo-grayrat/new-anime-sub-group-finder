@@ -63,6 +63,7 @@ class Store:
                 old.end_date = anime.end_date
                 old.schedule_checked_at = anime.schedule_checked_at
             old.on_air = old.on_air or anime.on_air
+            old.cover_url = anime.cover_url or old.cover_url
             for key in ["premiere", "end_date", "bgm_id", "season_hint", "total_episodes"]:
                 if getattr(anime, key) is not None:
                     setattr(old, key, getattr(anime, key))

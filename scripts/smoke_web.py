@@ -23,7 +23,27 @@ async def main():
         await page.goto(url)
         await page.locator("details.anime[data-anime]").first.wait_for()
         assert await page.locator('link[href="/static/vendor/bangumi-r771.css"]').count() == 1
+        await page.wait_for_function(
+            "[...document.querySelectorAll('.finder-cover img')].some(e => e.complete && e.naturalWidth > 0)",
+            timeout=60000,
+        )
+        await page.wait_for_function(
+            "[...document.querySelectorAll('.finder-cover img')].every(e => "
+            "e.getBoundingClientRect().top >= innerHeight || e.complete)",
+            timeout=60000,
+        )
+        assert (
+            await page.locator("#browserItemList .finder-cover").count()
+            == await page.locator("details.anime[data-anime]").count()
+        )
         await page.screenshot(path=str(output / "anime-list.png"), full_page=False)
+        async with page.expect_popup() as preview:
+            await page.locator(".finder-cover:not(.unavailable)").first.click()
+        popup = await preview.value
+        await popup.wait_for_load_state()
+        assert popup.url.endswith("/cover")
+        assert (await popup.request.get(popup.url)).headers["content-type"].startswith("image/")
+        await popup.close()
         anime_count = await page.locator("details.anime[data-anime]").count()
         await page.locator("details.anime[data-anime] summary").first.click()
         await page.locator("details.group").first.wait_for()
@@ -47,9 +67,17 @@ async def main():
                 updates = await (await page.request.get(url + "/api/updates")).json()
                 assert await page.locator("details.recent-update").count() == len(updates["items"])
                 if updates["items"]:
+                    assert await page.locator("#change-items .finder-cover").count() == len(updates["items"])
+                    await page.wait_for_function(
+                        "[...document.querySelectorAll('#change-items .finder-cover img')].some(e => e.complete && e.naturalWidth > 0)",
+                        timeout=60000,
+                    )
                     await page.locator("details.recent-update summary").first.click()
                     await page.locator(".resources .resource").first.wait_for()
-                    assert await page.locator(".resources .resource").count() == updates["items"][0]["release_count"]
+                    assert (
+                        await page.locator(".resources .resource").count()
+                        == updates["items"][0]["release_count"]
+                    )
                 await page.screenshot(path=str(output / "updates.png"), full_page=False)
             if name == "settings":
                 await page.locator("#platforms").wait_for()
@@ -114,6 +142,9 @@ async def main():
             assert await page.locator(".group-count").first.evaluate(
                 "e => e.getBoundingClientRect().right <= window.innerWidth"
             ), f"{width}px组数被裁切"
+            assert await page.locator(".finder-cover").first.evaluate(
+                "e => e.getBoundingClientRect().right < e.closest('li').querySelector('.inner').getBoundingClientRect().left"
+            ), f"{width}px封面与文字重叠"
             assert await page.locator('nav [data-page="settings"]').is_visible()
             assert await page.locator("#navMenuNeue a").evaluate_all(
                 "els => els.every(e => parseFloat(getComputedStyle(e).paddingLeft) >= 7)"
@@ -165,6 +196,15 @@ async def main():
         assert "模拟来源超时" in await page.locator(".source-error").inner_text()
         await page.screenshot(path=str(output / "source-failure.png"), full_page=False)
         await page.unroute("**/api/status", mock_failure)
+        async def missing_cover(route):
+            await route.fulfill(status=404, json={"detail": "封面暂不可用"})
+
+        await page.route("**/api/anime/*/cover", missing_cover)
+        await page.goto(url)
+        await page.locator(".finder-cover.unavailable").first.wait_for()
+        assert await page.locator("details.anime[data-anime]").count() > 0
+        assert not await page.locator(".finder-cover.unavailable").first.get_attribute("href")
+        await page.unroute("**/api/anime/*/cover", missing_cover)
         assert not errors, errors
         print(
             json.dumps(
@@ -176,6 +216,7 @@ async def main():
                     "responsive_widths": [320, 375, 414, 768],
                     "settings_payload": "verified without changing user settings",
                     "source_failure": "error visible and existing list retained",
+                    "covers": "real images, preview and missing-image fallback verified",
                 },
                 ensure_ascii=False,
             )

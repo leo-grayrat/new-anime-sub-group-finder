@@ -41,6 +41,8 @@ def match_anime(title, animes):
 
 
 def enrich_bgm(a, subject, ep_data):
+    images = subject.get("images") or {}
+    a.cover_url = images.get("common") or images.get("medium") or a.cover_url
     if subject.get("date"):
         a.premiere = subject["date"]
     if subject.get("name_cn"):
@@ -187,6 +189,7 @@ class Monitor:
                 a = Anime(
                     id=f"bgm:{item['id']}",
                     bgm_id=item["id"],
+                    cover_url=(item.get("images") or {}).get("common") or "",
                     title=item.get("name_cn") or item["name"],
                     aliases=[item["name"], item.get("name_cn") or item["name"]],
                     premiere=item.get("air_date"),

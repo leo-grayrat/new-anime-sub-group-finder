@@ -5,6 +5,7 @@ class Anime(BaseModel):
     id: str
     title: str
     bgm_id: int | None = None
+    cover_url: str = ""
     aliases: list[str] = Field(default_factory=list)
     premiere: str | None = None
     end_date: str | None = None

@@ -234,6 +234,7 @@ def parse_anibt_catalog(data, season):
         Anime(
             id=f"bgm:{a['bgmId']}",
             bgm_id=int(a["bgmId"]),
+            cover_url=a.get("cover") or "",
             title=a["title"].get("chinese") or a["title"]["primary"],
             aliases=list(set(v for v in a["title"].values() if isinstance(v, str) and v)),
             premiere=a.get("premiereDate"),

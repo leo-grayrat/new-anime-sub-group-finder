@@ -53,6 +53,13 @@ function empty(label) {
   return `<div class="empty"><strong>${esc(label)}</strong></div>`;
 }
 
+function cover(animeId, title, bgmId, coverUrl) {
+  const available = bgmId || coverUrl;
+  const url = `/api/anime/${encodeURIComponent(animeId)}/cover`;
+  const tag = available ? 'a' : 'span';
+  return `<${tag} class="subjectCover cover coverPortrait finder-cover${available ? '' : ' unavailable'}" ${available ? `href="${esc(url)}" target="_blank" rel="noopener" title="查看 ${esc(title)} 的封面"` : ''}><span class="cover-placeholder" aria-hidden="true">暂无封面</span>${available ? `<img class="cover" src="${esc(url)}" alt="${esc(title)} 封面" width="78" height="104" loading="lazy" decoding="async">` : ''}</${tag}>`;
+}
+
 function filters() {
   $('#filters').innerHTML = Object.entries(scopeNames).map(([value, label]) => `<li><a href="#anime" data-scope="${value}" class="l ${scope === value && page === 'anime' ? 'focus' : ''}" ${scope === value && page === 'anime' ? 'aria-current="true"' : ''}>${label}</a></li>`).join('');
   $('#filters').querySelectorAll('[data-scope]').forEach(a => a.onclick = event => {
@@ -90,7 +97,7 @@ async function animePage() {
   const data = await api('/api/anime?' + new URLSearchParams({keyword, scope, has_groups: hasGroups}));
   if (version !== viewVersion || page !== 'anime') return;
   $('#page-title').textContent = '番剧';
-  $('#content').innerHTML = `<div id="browserTools" class="clearit"><span>${data.items.length} 部 / ${scopeNames[scope]}</span><label><input type="checkbox" id="has-groups" ${hasGroups ? 'checked' : ''}>有可用组</label></div>` + (data.items.length ? `<ul id="browserItemList" class="browserFull finder-list">${data.items.map((a, i) => `<li class="item ${i % 2 ? 'even' : 'odd'} clearit"><div class="inner"><details class="anime" data-anime="${esc(a.id)}"><summary><h3 class="anime-title">${esc(a.title)}</h3><p class="info tip">${esc(a.premiere || '首播待核实')} / ${scopeNames[a.scope]}${a.total_episodes ? ' / ' + a.total_episodes + ' 话' : ''}</p><p class="group-preview">${esc(a.groups.map(g => g.name).join(' / ') || '暂无可用组')}</p><span class="group-count"><strong>${a.group_count}</strong>组</span></summary><div class="detail"></div></details></div></li>`).join('')}</ul>` : empty('没有符合条件的番剧'));
+  $('#content').innerHTML = `<div id="browserTools" class="clearit"><span>${data.items.length} 部 / ${scopeNames[scope]}</span><label><input type="checkbox" id="has-groups" ${hasGroups ? 'checked' : ''}>有可用组</label></div>` + (data.items.length ? `<ul id="browserItemList" class="browserFull finder-list">${data.items.map((a, i) => `<li class="item ${i % 2 ? 'even' : 'odd'} clearit">${cover(a.id, a.title, a.bgm_id, a.cover_url)}<div class="inner"><details class="anime" data-anime="${esc(a.id)}"><summary><h3 class="anime-title">${esc(a.title)}</h3><p class="info tip">${esc(a.premiere || '首播待核实')} / ${scopeNames[a.scope]}${a.total_episodes ? ' / ' + a.total_episodes + ' 话' : ''}</p><p class="group-preview">${esc(a.groups.map(g => g.name).join(' / ') || '暂无可用组')}</p><span class="group-count"><strong>${a.group_count}</strong>组</span></summary><div class="detail"></div></details></div></li>`).join('')}</ul>` : empty('没有符合条件的番剧'));
   $('#has-groups').onchange = event => { hasGroups = event.target.checked; animePage().catch(showError); };
   $('#content').querySelectorAll('[data-anime]').forEach(el => el.addEventListener('toggle', async () => {
     if (!el.open || el.dataset.loaded) return;
@@ -128,7 +135,7 @@ async function changesPage() {
   if (version !== viewVersion || page !== 'changes') return;
   updatesRefreshedAt = Date.now();
   $('#page-title').textContent = pageNames.changes;
-  $('#content').innerHTML = `<div id="browserTools" class="clearit"><span>${data.items.length} 组更新</span><span class="tip">${esc(time(data.window_start))} — ${esc(time(data.window_end))}</span></div>` + (data.items.length ? `<ul id="change-items" class="browserFull finder-list">${data.items.map((c, i) => `<li class="item ${i % 2 ? 'even' : 'odd'} clearit"><div class="inner"><details class="anime recent-update" data-update="${i}"><summary><h3 class="anime-title">${esc(c.anime_title)}</h3><p class="group-preview">${esc(c.group_name)}</p><p class="info tip">${esc(time(c.updated_at))} / 更新集数 ${esc(episodeText(c.episodes))}</p><span class="group-count"><strong>${c.release_count}</strong>条</span></summary><div class="detail resources"></div></details></div></li>`).join('')}</ul>` : empty('近 24 小时暂无更新'));
+  $('#content').innerHTML = `<div id="browserTools" class="clearit"><span>${data.items.length} 组更新</span><span class="tip">${esc(time(data.window_start))} — ${esc(time(data.window_end))}</span></div>` + (data.items.length ? `<ul id="change-items" class="browserFull finder-list">${data.items.map((c, i) => `<li class="item ${i % 2 ? 'even' : 'odd'} clearit">${cover(c.anime_id, c.anime_title, c.bgm_id, c.cover_url)}<div class="inner"><details class="anime recent-update" data-update="${i}"><summary><h3 class="anime-title">${esc(c.anime_title)}</h3><p class="group-preview">${esc(c.group_name)}</p><p class="info tip">${esc(time(c.updated_at))} / 更新集数 ${esc(episodeText(c.episodes))}</p><span class="group-count"><strong>${c.release_count}</strong>条</span></summary><div class="detail resources"></div></details></div></li>`).join('')}</ul>` : empty('近 24 小时暂无更新'));
   $('#content').querySelectorAll('[data-update]').forEach(el => el.addEventListener('toggle', () => {
     if (!el.open || el.dataset.loaded) return;
     el.dataset.loaded = '1';
@@ -227,6 +234,14 @@ document.addEventListener('click', async event => {
   try { await navigator.clipboard.writeText(button.dataset.copy); notice('已复制'); }
   catch { notice('复制失败，可直接打开链接'); }
 });
+
+document.addEventListener('error', event => {
+  if (!event.target.matches?.('.finder-cover img')) return;
+  const container = event.target.closest('.finder-cover');
+  container.classList.add('unavailable');
+  container.removeAttribute('href');
+  container.removeAttribute('title');
+}, true);
 document.addEventListener('keydown', event => {
   if (event.key === ' ' && event.target.matches('a[role=button]')) { event.preventDefault(); event.target.click(); }
 });

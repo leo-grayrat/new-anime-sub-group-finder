@@ -33,7 +33,7 @@ class Network:
     async def close(self):
         await self.client.aclose()
 
-    async def text(self, url, params=None):
+    async def get(self, url, params=None):
         host = urlsplit(url).hostname
         key = str(httpx.URL(url, params=params)) if params else url
         lock = self.locks.setdefault(host, asyncio.Lock())
@@ -59,11 +59,11 @@ class Network:
                         r.raise_for_status()
                     r.raise_for_status()
                     if r.headers.get("etag") or r.headers.get("last-modified"):
-                        self.cache[key] = (r.headers.get("etag"), r.headers.get("last-modified"), r.text)
+                        self.cache[key] = (r.headers.get("etag"), r.headers.get("last-modified"), r)
                         self.cache.move_to_end(key)
                         while len(self.cache) > 512:
                             self.cache.popitem(last=False)
-                    return r.text
+                    return r
                 except (httpx.TransportError, httpx.HTTPStatusError) as error:
                     retryable = (
                         not isinstance(error, httpx.HTTPStatusError)
@@ -86,6 +86,9 @@ class Network:
                             except (ValueError, TypeError, OverflowError):
                                 pass
                     await asyncio.sleep(delay)
+
+    async def text(self, url, params=None):
+        return (await self.get(url, params)).text
 
     async def json(self, url, params=None):
         import json
