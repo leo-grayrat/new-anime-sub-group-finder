@@ -12,7 +12,8 @@ async def test_pages_export_is_read_only_relative_and_contains_current_grouped_d
     config = Config(proxy="http://127.0.0.1:7897", data_dir=str(tmp_path / "private-data"))
     store = Store(tmp_path / "private-data" / "finder.sqlite")
     monitor = Monitor(config, store)
-    store.upsert_anime(Anime(id="bgm:1", title="新番", premiere="2026-10-01"))
+    cover = "https://lain.bgm.tv/pic/cover/l/d3/99/622288_nmbC3.jpg"
+    store.upsert_anime(Anime(id="bgm:1", title="新番", premiere="2026-10-01", cover_url=cover))
     for group in ["中文组", "ANi"]:
         store.ingest(
             Release(
@@ -28,7 +29,7 @@ async def test_pages_export_is_read_only_relative_and_contains_current_grouped_d
         )
     try:
         output = tmp_path / "site"
-        await export_site(monitor, output, fetch_covers=False)
+        await export_site(monitor, output)
         html = (output / "index.html").read_text(encoding="utf-8")
         assert 'name="finder-mode" content="static"' in html
         assert 'href="static/' in html and 'src="static/' in html
@@ -37,6 +38,11 @@ async def test_pages_export_is_read_only_relative_and_contains_current_grouped_d
         data = json.loads((output / "data.json").read_text(encoding="utf-8"))
         assert data["blocked"]["items"][0]["group_name"] == "ANi"
         assert data["anime"][0]["title"] == "新番"
+        assert data["anime"][0]["cover_url"] == cover
+        assert data["blocked"]["items"][0]["animes"][0]["cover_url"] == cover
+        assert "covers" not in data
+        assert not (output / "covers").exists()
+        assert not (tmp_path / "private-data" / "covers").exists()
         assert data["groups"]["bgm:1"][0]["name"] == "中文组"
         assert "7897" not in json.dumps(data)
         assert "private-data" not in json.dumps(data)

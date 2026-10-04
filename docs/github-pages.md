@@ -2,7 +2,7 @@
 
 本次只准备文件和本地验证，未创建 GitHub 仓库、推送代码或发布网页。
 
-Pages 提供只读网页：番剧、近24h更新、按字幕组分组的季度屏蔽记录和未匹配资源。设置、手动采集和 MCP 使用本机服务。封面随网页导出，支持 `用户名.github.io/仓库名/` 项目路径。
+Pages 提供只读网页：番剧、近24h更新、按字幕组分组的季度屏蔽记录和未匹配资源。设置、手动采集和 MCP 使用本机服务。封面直接使用 `lain.bgm.tv` 外链，不导出图片文件，支持 `用户名.github.io/仓库名/` 项目路径。
 
 ## 本地导出与预览
 
@@ -13,7 +13,7 @@ Pages 提供只读网页：番剧、近24h更新、按字幕组分组的季度�
 .venv\Scripts\python.exe scripts/smoke_pages.py dist/pages
 ```
 
-导出读取 SQLite 的一致快照，默认不扫描，不需要停止常驻服务。缺少缓存的封面会通过已配置的代理获取；可加 `--no-covers` 跳过。输出不会复制 `config.json`、SQLite、日志或代理设置。
+导出读取 SQLite 的一致快照，默认不扫描，不需要停止常驻服务。图片由浏览器直接加载，不经过本机服务，也不在导出时下载。输出不会复制 `config.json`、SQLite、日志或代理设置。
 
 普通预览可运行 `.venv\Scripts\python.exe -m http.server 18767 --directory dist`，打开 `http://127.0.0.1:18767/pages/`。不要直接以 `file://` 打开。
 
@@ -21,7 +21,7 @@ Pages 提供只读网页：番剧、近24h更新、按字幕组分组的季度�
 
 确认仓库公开范围后，再创建远端、推送代码。在 GitHub 仓库的 Settings → Pages 中选择 GitHub Actions，手动运行 **Build and deploy read-only monitor**。
 
-已准备 `.github/workflows/pages.yml`：手动触发、main 分支更新，以及每小时第17、47分钟触发。GitHub 调度可能延迟，不等同于本机10分钟采集。任务在 GitHub Runner 上直连采集，不使用本机7897代理；数据和封面通过 Actions 缓存延续，网页显示来源错误及数据过期状态。
+已准备 `.github/workflows/pages.yml`：手动触发、main 分支更新，以及每小时第17、47分钟触发。GitHub 调度可能延迟，不等同于本机10分钟采集。任务在 GitHub Runner 上直连采集，不使用本机7897代理；采集数据通过 Actions 缓存延续，网页显示来源错误及数据过期状态。
 
 季度及公开筛选名单使用 `config.example.json`。本机 `config.json` 的自定义名单不会自动上传；发布前把希望公开使用的规则更新到配置示例。工作流设置 `FANSUB_PROXY` 为空，避免访问 Runner 自己的127.0.0.1。
 

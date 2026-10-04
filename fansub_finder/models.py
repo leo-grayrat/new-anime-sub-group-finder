@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from .covers import original_cover_url
 
 
 class Anime(BaseModel):
@@ -17,6 +19,11 @@ class Anime(BaseModel):
     sources: dict[str, str] = Field(default_factory=dict)
     evidence: list[str] = Field(default_factory=list)
     override: str | None = None
+
+    @field_validator("cover_url")
+    @classmethod
+    def direct_cover_url(cls, value):
+        return original_cover_url(value)
 
 
 class Release(BaseModel):

@@ -63,7 +63,12 @@ class Store:
                 old.end_date = anime.end_date
                 old.schedule_checked_at = anime.schedule_checked_at
             old.on_air = old.on_air or anime.on_air
-            old.cover_url = anime.cover_url or old.cover_url
+            # Keep Bangumi artwork when another catalog provides its own mirrored image.
+            if anime.cover_url and (
+                not old.cover_url.startswith("https://lain.bgm.tv/")
+                or anime.cover_url.startswith("https://lain.bgm.tv/")
+            ):
+                old.cover_url = anime.cover_url
             for key in ["premiere", "end_date", "bgm_id", "season_hint", "total_episodes"]:
                 if getattr(anime, key) is not None:
                     setattr(old, key, getattr(anime, key))

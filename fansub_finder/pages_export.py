@@ -3,21 +3,19 @@
 import argparse
 import asyncio
 import json
-import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 from .config import load_config
-from .covers import Covers
 from .monitor import Monitor
 from .rules import group_key
 from .service import QueryService
 from .store import Store
 
 
-async def export_site(monitor, output, fetch_covers=True):
+async def export_site(monitor, output):
     output = Path(output).resolve()
     static = Path(__file__).parent / "static"
     if (
@@ -69,7 +67,6 @@ async def export_site(monitor, output, fetch_covers=True):
             "updates": updates,
             "blocked": blocked,
             "unmatched": {"items": unmatched[:500], "total": len(unmatched)},
-            "covers": {},
         }
         output.mkdir(parents=True, exist_ok=True)
         shutil.copytree(static, output / "static", dirs_exist_ok=True)
@@ -78,28 +75,6 @@ async def export_site(monitor, output, fetch_covers=True):
         html = html.replace('href="/static/', 'href="static/').replace('src="/static/', 'src="static/')
         (output / "index.html").write_text(html, encoding="utf-8")
         (output / ".nojekyll").touch()
-        if fetch_covers:
-            covers = Covers(reader)
-            needed = {a["id"] for a in anime if a["group_count"] and a["scope"] in ["current", "continuing"]}
-            needed.update(a["id"] for g in blocked["items"] for a in g["animes"])
-            for anime_id in sorted(needed):
-                try:
-                    image, media_type = await covers.get(anime_id)
-                    suffix = {
-                        "image/jpeg": "jpg",
-                        "image/png": "png",
-                        "image/webp": "webp",
-                        "image/gif": "gif",
-                    }[media_type]
-                    import hashlib
-
-                    relative = "covers/" + hashlib.sha256(anime_id.encode()).hexdigest() + "." + suffix
-                    target = output / relative
-                    target.parent.mkdir(exist_ok=True)
-                    target.write_bytes(image)
-                    data["covers"][anime_id] = relative
-                except Exception as error:
-                    logging.warning("封面未导出 %s: %s", anime_id, type(error).__name__)
         temporary = output / "data.tmp"
         temporary.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         temporary.replace(output / "data.json")
@@ -113,7 +88,6 @@ def main():
     parser.add_argument("--config", default="config.json")
     parser.add_argument("--output", default="dist/pages")
     parser.add_argument("--scan", action="store_true", help="导出前扫描；只用于未运行常驻服务的环境")
-    parser.add_argument("--no-covers", action="store_true")
     args = parser.parse_args()
 
     async def build():
@@ -124,7 +98,7 @@ def main():
             if args.scan:
                 store.reclassify(monitor.rules)
                 await monitor.scan()
-            data = await export_site(monitor, args.output, fetch_covers=not args.no_covers)
+            data = await export_site(monitor, args.output)
             print(
                 json.dumps(
                     {

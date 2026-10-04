@@ -32,6 +32,14 @@ async def main():
             page.on("request", lambda request: requests.append(request.url))
             await page.goto(url)
             await page.locator("details.anime[data-anime]").first.wait_for()
+            await page.wait_for_function(
+                "[...document.querySelectorAll('.finder-cover img')].some(e => e.complete && e.naturalWidth > 0)",
+                timeout=60000,
+            )
+            assert await page.locator(".finder-cover img").evaluate_all(
+                "els => els.every(e => e.src.startsWith('https://lain.bgm.tv/pic/cover/'))"
+            )
+            assert not any("/covers/" in request for request in requests)
             assert not await page.locator('[data-page="settings"]').is_visible()
             assert await page.locator("#scan").get_attribute("aria-disabled") == "true"
             await page.locator("#scan").click(force=True)

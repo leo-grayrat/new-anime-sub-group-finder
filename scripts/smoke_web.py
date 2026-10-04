@@ -18,7 +18,8 @@ async def main():
         browser = await p.chromium.launch(channel="msedge", headless=True)
         context = await browser.new_context(viewport={"width": 1440, "height": 1000})
         page = await context.new_page()
-        errors = []
+        errors, requests = [], []
+        page.on("request", lambda request: requests.append(request.url))
         page.on("pageerror", lambda e: errors.append(str(e)))
         await page.goto(url)
         await page.locator("details.anime[data-anime]").first.wait_for()
@@ -41,8 +42,12 @@ async def main():
             await page.locator(".finder-cover:not(.unavailable)").first.click()
         popup = await preview.value
         await popup.wait_for_load_state()
-        assert popup.url.endswith("/cover")
-        assert (await popup.request.get(popup.url)).headers["content-type"].startswith("image/")
+        assert popup.url.startswith("https://lain.bgm.tv/pic/cover/")
+        await popup.wait_for_function("document.querySelector('img')?.naturalWidth > 0")
+        assert await page.locator(".finder-cover img").evaluate_all(
+            "els => els.every(e => e.src.startsWith('https://lain.bgm.tv/pic/cover/'))"
+        )
+        assert not any("/api/anime/" in request and request.endswith("/cover") for request in requests)
         await popup.close()
         anime_count = await page.locator("details.anime[data-anime]").count()
         await page.locator("details.anime[data-anime] summary").first.click()
@@ -211,12 +216,12 @@ async def main():
         async def missing_cover(route):
             await route.fulfill(status=404, json={"detail": "封面暂不可用"})
 
-        await page.route("**/api/anime/*/cover", missing_cover)
+        await page.route("https://lain.bgm.tv/**", missing_cover)
         await page.goto(url)
         await page.locator(".finder-cover.unavailable").first.wait_for()
         assert await page.locator("details.anime[data-anime]").count() > 0
         assert not await page.locator(".finder-cover.unavailable").first.get_attribute("href")
-        await page.unroute("**/api/anime/*/cover", missing_cover)
+        await page.unroute("https://lain.bgm.tv/**", missing_cover)
         assert not errors, errors
         print(
             json.dumps(
