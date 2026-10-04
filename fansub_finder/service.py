@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from .rules import scope_for
+from .rules import group_key, quarter_bounds, scope_for
 
 
 class QueryService:
@@ -37,6 +37,22 @@ class QueryService:
     def envelope(self, items):
         return {"items": items, "status": self.status()}
 
+    def groups_for(self, anime_id, season=None):
+        season = season or self.monitor.config.season
+        start, end = quarter_bounds(season)
+        a = self.store.anime(anime_id)
+        groups = self.store.groups(anime_id)
+        if not a or scope_for(a, season) != "continuing":
+            return groups
+        since = (date.fromisoformat(start) - timedelta(days=14)).isoformat()
+        active = {
+            group_key(o["group"])
+            for r in self.store.releases(anime_id)
+            for o in r["origins"]
+            if o["published_at"] and since <= o["published_at"][:10] < end
+        }
+        return [g for g in groups if g["id"] in active]
+
     def list_anime(self, season=None, include_continuing=True, keyword="", scope="active", has_groups=False):
         season = season or self.monitor.config.season
         result = []
@@ -50,7 +66,7 @@ class QueryService:
                 continue
             if keyword and not any(keyword.casefold() in name.casefold() for name in [a.title, *a.aliases]):
                 continue
-            groups = self.store.groups(a.id)
+            groups = self.groups_for(a.id, season)
             if has_groups and not groups:
                 continue
             result.append(
@@ -64,11 +80,16 @@ class QueryService:
         result.sort(key=lambda a: (a["scope"] != "current", -a["group_count"], a["title"]))
         return self.envelope(result)
 
-    def list_groups(self, anime_id):
-        return self.envelope(self.store.groups(anime_id))
+    def list_groups(self, anime_id, season=None):
+        return self.envelope(self.groups_for(anime_id, season))
 
-    def list_releases(self, anime_id, group=None):
-        return self.envelope(self.store.releases(anime_id, group))
+    def list_releases(self, anime_id, group=None, season=None):
+        quarter_bounds(season or self.monitor.config.season)
+        releases = self.store.releases(anime_id, group)
+        if not group:
+            active = {g["id"] for g in self.groups_for(anime_id, season)}
+            releases = [r for r in releases if any(group_key(o["group"]) in active for o in r["origins"])]
+        return self.envelope(releases)
 
     def list_changes(self, after=0, since=None, season=None):
         result = []
@@ -77,7 +98,7 @@ class QueryService:
         for change in page:
             a = self.store.anime(change["anime_id"])
             if a and scope_for(a, season) in ["current", "continuing"]:
-                g = next((g for g in self.store.groups(a.id) if g["id"] == change["group_id"]), None)
+                g = next((g for g in self.groups_for(a.id, season) if g["id"] == change["group_id"]), None)
                 if g:
                     result.append({**change, "anime_title": a.title, "episodes": g["episodes"]})
         cursor = page[-1]["id"] if page else after

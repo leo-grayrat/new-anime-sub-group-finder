@@ -45,6 +45,7 @@ async def main():
                 await page.locator("#platforms").wait_for()
                 assert "CATCHPLAY" in await page.locator("#platforms").input_value()
                 assert "7897" in await page.locator("#proxy").input_value()
+                assert "NEST" in await page.locator("#review-groups").input_value()
                 await page.screenshot(path=str(output / "settings.png"), full_page=True)
         await page.set_viewport_size({"width": 390, "height": 844})
         await page.locator('nav button[data-page="anime"]').click()

@@ -132,6 +132,8 @@ class Store:
             if previous.description_checked_at and not r.description_checked_at:
                 extra = r.description if r.description and r.description not in previous.description else ""
                 r.description = (previous.description + ("\n" + extra if extra else ""))[:50000]
+                if previous.subtitle.upper() == "NONE":
+                    r.subtitle = previous.subtitle
             if r.group in ["", "未署名"] and previous.group not in ["", "未署名"]:
                 r.group = previous.group
             for field in [
@@ -248,6 +250,7 @@ class Store:
                 "url": r.url,
                 "torrent": r.torrent,
                 "rss": r.rss,
+                "published_at": r.published_at,
                 "reasons": reasons,
                 "description": r.description,
                 "description_url": r.description_url,
@@ -316,7 +319,7 @@ class Store:
                 g["sources"].add(origin["source"])
                 if origin["rss"]:
                     g["rss"].add(origin["rss"])
-                g["last_published"] = max(g["last_published"], r["published_at"])
+                g["last_published"] = max(g["last_published"], origin["published_at"])
                 if key not in counted:
                     g["release_count"] += 1
                     counted.add(key)

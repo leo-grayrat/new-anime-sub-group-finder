@@ -57,9 +57,9 @@ def parse_release_description(html, source, r):
     r.description = body.get_text("\n", strip=True)[:50000]
     # Only inspect the subtitle track block; Chinese audio and credits are not subtitle evidence.
     match = re.search(
-        r"(?:subtitles?(?:\s*\(\d+\))?|字幕(?:语言|語言|轨道|軌道)?)\s*[:：\n](.*?)(?=\n(?:chapters?|duration|checksums?|audio|video|notes?|comments?|credits?|source|音频|视频|音軌|章節|备注|備註|说明|說明)(?:\b|[:：])|$)",
+        r"(?:^|\n)[ \t]*(?:subtitles?(?:[ \t]*\(\d+\))?|字幕(?:语言|語言|轨道|軌道)?)[ \t]*[:：\n](.*?)(?=(?:\n|^)[ \t]*(?:chapters?|duration|checksums?|audio|video|notes?|comments?|credits?|source|音频|视频|音軌|章節|备注|備註|说明|說明)(?:\b|[:：])|\Z)",
         r.description,
-        re.I | re.S,
+        re.I | re.S | re.M,
     )
     if match:
         block = re.sub(
@@ -81,6 +81,12 @@ def parse_release_description(html, source, r):
         found = [lang for lang, pattern in patterns.items() if re.search(pattern, block, re.I)]
         if found:
             r.languages = sorted(set(r.languages + found))
+        elif re.fullmatch(
+            r"(?:meh[,，]?\s*)?(?:none|no(?:\s+subtitles?)?|无字幕|無字幕|无|無|没有|沒有)[.。!！]?",
+            match.group(1).strip().partition("\n")[0],
+            re.I,
+        ):
+            r.subtitle = "NONE"
     r.description_url = r.url
     from .store import now
 

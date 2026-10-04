@@ -37,14 +37,14 @@ def create_mcp(provider):
         )
 
     @mcp.tool(annotations=read)
-    async def list_groups(anime_id: str) -> dict:
-        """查询番剧的发布组、已采集集数、来源与 RSS；anime_id 使用 list_anime 返回的 id。"""
-        return await call("list_groups", anime_id=anime_id)
+    async def list_groups(anime_id: str, season: str | None = None) -> dict:
+        """查询番剧的发布组、集数、来源与 RSS；历史季度下钻请传入与 list_anime 相同的 season。"""
+        return await call("list_groups", anime_id=anime_id, season=season)
 
     @mcp.tool(annotations=read)
-    async def list_releases(anime_id: str, group: str | None = None) -> dict:
-        """列出某番某组的资源与原站链接、磁力和种子链接。"""
-        return await call("list_releases", anime_id=anime_id, group=group)
+    async def list_releases(anime_id: str, group: str | None = None, season: str | None = None) -> dict:
+        """列出资源与原站、磁力链接；历史季度下钻请传同一 season，指定 group 可查询该组完整采集历史。"""
+        return await call("list_releases", anime_id=anime_id, group=group, season=season)
 
     @mcp.tool(annotations=read)
     async def list_changes(after: int = 0, since: str | None = None, season: str | None = None) -> dict:

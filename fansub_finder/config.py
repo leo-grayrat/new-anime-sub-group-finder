@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
 
-from .rules import DEFAULT_GROUPS, DEFAULT_PLATFORMS, quarter_bounds
+from .rules import DEFAULT_GROUPS, DEFAULT_PLATFORMS, DEFAULT_REVIEW_GROUPS, quarter_bounds
 
 
 class Config(BaseModel):
@@ -14,6 +14,7 @@ class Config(BaseModel):
     catalog_hours: int = Field(default=6, ge=1, le=168)
     groups: list[str] = Field(default_factory=lambda: DEFAULT_GROUPS.copy())
     platforms: list[str] = Field(default_factory=lambda: DEFAULT_PLATFORMS.copy())
+    review_groups: list[str] = Field(default_factory=lambda: DEFAULT_REVIEW_GROUPS.copy())
     mikan_host: str = "https://mikanani.me"
     data_dir: str = "data"
 

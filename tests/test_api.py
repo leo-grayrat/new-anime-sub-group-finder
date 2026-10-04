@@ -51,3 +51,38 @@ def test_restart_applies_configuration_to_persisted_resources(tmp_path):
     second = create_app(config.model_copy(update={"groups": ["好组"]}), start_monitor=False)
     with TestClient(second) as client:
         assert len(client.get("/api/blocked").json()["items"]) == 1
+
+
+def test_historical_quarter_drilldown_and_review_settings(tmp_path):
+    app = create_app(
+        Config(proxy="", data_dir=str(tmp_path)), config_path=tmp_path / "config.json", start_monitor=False
+    )
+    with TestClient(app) as client:
+        store = app.state.monitor.store
+        store.upsert_anime(Anime(id="bgm:1", title="长篇", override="continuing"))
+        store.ingest(
+            Release(
+                source="anibt",
+                source_id="1",
+                anime_id="bgm:1",
+                group="NEST",
+                title="[NEST] 长篇 [01]",
+                published_at="2026-07-15",
+            ),
+            app.state.monitor.rules,
+            baseline=True,
+        )
+        assert client.get("/api/anime/bgm:1/groups", params={"season": "2026-07"}).json()["items"] == []
+        cfg = client.get("/api/config").json()
+        cfg["review_groups"] = []
+        assert client.put("/api/config", json=cfg).status_code == 200
+        assert client.get("/api/anime", params={"season": "2026-07"}).json()["items"][0]["group_count"] == 1
+        assert (
+            client.get("/api/anime/bgm:1/groups", params={"season": "2026-07"}).json()["items"][0]["name"]
+            == "NEST"
+        )
+        assert len(client.get("/api/anime/bgm:1/releases", params={"season": "2026-07"}).json()["items"]) == 1
+        assert client.get("/api/anime/bgm:1/groups").json()["items"] == []
+        assert client.get("/api/anime/bgm:1/groups", params={"season": "bad"}).status_code == 422
+        assert client.get("/api/anime/bgm:1/releases", params={"season": "bad"}).status_code == 422
+        assert client.get("/api/changes").json()["items"] == []

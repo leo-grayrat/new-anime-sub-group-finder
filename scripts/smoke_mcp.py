@@ -31,7 +31,7 @@ async def verify(read, write, label):
         if data["items"]:
             aid = data["items"][0]["id"]
             for name in ["list_groups", "list_releases"]:
-                result = await session.call_tool(name, {"anime_id": aid})
+                result = await session.call_tool(name, {"anime_id": aid, "season": "2026-10"})
                 assert not result.isError
         changes = await session.call_tool("list_changes", {"after": 0})
         assert not changes.isError

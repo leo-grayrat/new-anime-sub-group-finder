@@ -16,8 +16,10 @@ DEFAULT_GROUPS = [
     "沸班亚马",
     "Skymoon-Raws",
     "YAYOI",
+    "Gecko",
 ]
 DEFAULT_PLATFORMS = ["CR", "Crunchyroll", "Baha", "Bahamut", "巴哈", "巴哈姆特", "CATCHPLAY", "CATCHPLAY+"]
+DEFAULT_REVIEW_GROUPS = ["NEST"]
 GROUP_ALIASES = {
     "nix-raw": "nix-raws",
     "nix raws": "nix-raws",
@@ -162,9 +164,10 @@ def current_quarter() -> str:
 
 
 class Rules:
-    def __init__(self, groups=None, platforms=None):
+    def __init__(self, groups=None, platforms=None, review_groups=None):
         self.groups = DEFAULT_GROUPS if groups is None else groups
         self.platforms = DEFAULT_PLATFORMS if platforms is None else platforms
+        self.review_groups = DEFAULT_REVIEW_GROUPS if review_groups is None else review_groups
 
     def check(self, r: Release) -> list[str]:
         reasons = []
@@ -174,13 +177,25 @@ class Rules:
         for banned in self.groups:
             if group_key(banned) in {group_key(x) for x in labels if x}:
                 reasons.append(f"发布组黑名单：{banned}")
+        for pending in self.review_groups:
+            if group_key(pending) in {group_key(x) for x in labels if x}:
+                reasons.append(f"发布者待核实：{pending}（中文字幕制作来源未确认）")
         text = " ".join([r.title, *r.tags, r.description])
         for tag in self.platforms:
             # ASCII token boundaries protect Crimson/Anima and accept CR_WEB-DL.
             pat = r"(?<![A-Za-z0-9])" + re.escape(tag) + r"(?![A-Za-z0-9])"
             if re.search(pat, text, re.I):
                 reasons.append(f"平台标签：{tag}")
-        if re.search(r"官方字幕|官方中字|官字|official\s+(?:subtitles?|subs)\b", text, re.I):
+        official_credit = re.search(
+            r"(?:^|\n)\s*(?:字幕(?:来源|來源)?|subtitles?(?:\s+source)?)\s*[:：]\s*(?:iQiYi|爱奇艺|愛奇藝|AMZN|Amazon(?:\s+Prime)?|Netflix|NF|ViuTV|Viu|YouTube|ABEMA)(?![A-Za-z0-9])",
+            r.description,
+            re.I,
+        )
+        if "lolihouse" in {group_key(x) for x in labels if x}:
+            official_credit = None  # User excludes LoliHouse from this additional provenance audit.
+        if official_credit or re.search(
+            r"官方字幕|官方中字|官字|official\s+(?:subtitles?|subs)\b", text, re.I
+        ):
             reasons.append("明确标注官方字幕")
         if r.subtitle.upper() == "NONE" or re.search(r"无字幕|無字幕|生肉|\bNO[ ._-]?SUBS?\b", text, re.I):
             reasons.append("明确无字幕")

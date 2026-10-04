@@ -22,6 +22,56 @@ def test_foreign_only_resources_do_not_ban_chinese_releases_from_same_publisher(
     assert not Rules().check(release(languages=[]))
 
 
+def test_gecko_repack_is_excluded_even_with_chinese_but_not_entire_publisher():
+    r = release(publisher="geckyzz", languages=["CHS", "CHT"])
+    r.title = "[Gecko] Saintess - S02E01 [YTB.WEB-DL M-SUB]"
+    assert "发布组黑名单：Gecko" in Rules().check(r)
+    assert not Rules().check(r.model_copy(update={"title": "[CicakRumah] 测试 - 01", "group": "CicakRumah"}))
+    assert not Rules().check(r.model_copy(update={"title": "[Geckology] 测试 - 01", "group": "Geckology"}))
+
+
+def test_description_explicitly_no_subtitles_overrides_inaccurate_feed_metadata():
+    r = release(subtitle="INTERNAL")
+    parse_release_description(
+        '<div class="prose">audio track\nJapanese\nsubtitles\nmeh, none\nchapters available?\nyep</div>',
+        "anibt",
+        r,
+    )
+    assert r.subtitle == "NONE"
+    assert "明确无字幕" in Rules().check(r)
+
+
+def test_verified_no_subtitles_survives_sparse_metadata_update(tmp_path):
+    store = Store(tmp_path / "db.sqlite")
+    r = release(subtitle="INTERNAL")
+    parse_release_description('<div class="prose">Subtitles: meh, none\nChapters: yes</div>', "anibt", r)
+    store.ingest(r, Rules(), baseline=True)
+    store.ingest(release(subtitle="INTERNAL"), Rules(), baseline=True)
+    assert not store.releases()
+    assert store.releases(blocked=True)[0]["subtitle"] == "NONE"
+    store.close()
+
+
+def test_empty_subtitle_section_remains_unknown():
+    for text in [
+        "Subtitles:\nChapters: yes",
+        "Subtitles\nAudio: Chinese\nChapters: yes",
+        "Subtitles\nCredits: Chinese translator unknown",
+    ]:
+        r = release(subtitle="INTERNAL")
+        parse_release_description(f'<div class="prose">{text}</div>', "anibt", r)
+        assert not r.languages
+        assert r.subtitle != "NONE"
+
+
+def test_explicit_platform_subtitle_credit_is_blocked_but_video_source_is_not():
+    assert "明确标注官方字幕" in Rules().check(release(description="字幕：iQiYi海外\n压制：测试组"))
+    assert not Rules().check(release(description="片源：iQiYi海外\n翻译：译者\n字幕：测试字幕组"))
+    assert not Rules().check(release(description="字幕：我们的组\n备注：参考了 Netflix 平台内容"))
+    r = release(description="字幕：AMZN\n压制：测试组").model_copy(update={"group": "LoliHouse"})
+    assert not Rules().check(r)
+
+
 def test_detail_only_platform_tag_is_blocked_and_sidebars_are_ignored():
     r = release()
     parse_release_description(
@@ -49,6 +99,8 @@ def test_subtitle_track_language_is_separate_from_audio():
 def test_subtitle_notes_and_negated_chinese_are_not_tracks():
     for text in [
         "Subtitles: English (ASS)\nNotes: Chinese audio only, no Chinese subtitles.",
+        "Subtitles: English (ASS)\n  Audio: Chinese\nChapters: yes",
+        "Subtitles: English (ASS)\n\tNotes: Chinese audio only\nChapters: yes",
         "Subtitles: English (ASS), no Chinese subtitles\nChapters: yes",
     ]:
         r = release()

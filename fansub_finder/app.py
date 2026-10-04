@@ -77,12 +77,18 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
             raise HTTPException(422, str(e)) from e
 
     @app.get("/api/anime/{anime_id}/groups")
-    async def groups(anime_id: str):
-        return query.list_groups(anime_id)
+    async def groups(anime_id: str, season: str | None = None):
+        try:
+            return query.list_groups(anime_id, season)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
 
     @app.get("/api/anime/{anime_id}/releases")
-    async def releases(anime_id: str, group: str | None = None):
-        return query.list_releases(anime_id, group)
+    async def releases(anime_id: str, group: str | None = None, season: str | None = None):
+        try:
+            return query.list_releases(anime_id, group, season)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
 
     @app.get("/api/changes")
     async def changes(after: int = 0, since: str | None = None, season: str | None = None):

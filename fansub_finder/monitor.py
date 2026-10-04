@@ -80,7 +80,7 @@ class Monitor:
 
     @property
     def rules(self):
-        return Rules(self.config.groups, self.config.platforms)
+        return Rules(self.config.groups, self.config.platforms, self.config.review_groups)
 
     async def close(self):
         if self.task and self.task is not asyncio.current_task():
