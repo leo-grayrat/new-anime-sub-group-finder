@@ -1,11 +1,59 @@
 <!doctype html>
-<html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>新番 · 字幕组发现</title><link rel="stylesheet" href="/static/style.css"></head>
-<body>
-<header><div><span class="eyebrow">FANSUB FINDER</span><h1>新番字幕组发现<span id="quarter"></span></h1><p>三站汇总，直接找组。</p></div><button id="scan" class="primary">立即采集</button></header>
-<section id="health" aria-label="采集状态"></section><p id="progress" class="muted" aria-live="polite"></p>
-<nav aria-label="主导航"><button data-page="anime" class="selected">番剧</button><button data-page="changes">新增字幕组</button><button data-page="blocked">已屏蔽</button><button data-page="unmatched">未匹配</button><button data-page="settings">设置与状态</button></nav>
-<main id="content"></main><div id="notice" role="status" hidden></div>
-<footer>按明确的黑名单与平台标签筛选。集数表示已采集记录，来源失败时保留历史结果。</footer>
-<script src="/static/app.js" defer></script>
-</body></html>
+<html lang="zh-CN" data-theme="light" data-theme-color="pink">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>新番 · 字幕组</title>
+  <link rel="stylesheet" href="/static/vendor/bangumi-r771.css">
+  <link rel="stylesheet" href="/static/style.css?v=20261004-2">
+</head>
+<body class="bangumi">
+<div id="wrapperNeue" class="wrapperNeue mainXL">
+  <header id="headerNeue2">
+    <div class="headerNeueInner clearit">
+      <a class="logo finder-logo" href="#anime" aria-label="新番字幕组首页">新番<small>字幕组</small></a>
+      <div id="navNeue2">
+        <nav id="menuNeue" aria-label="主导航">
+          <ul id="navMenuNeue" class="clearit">
+            <li><a class="focus chl anime selected" data-page="anime" href="#anime" aria-current="page"><span>番剧</span></a></li>
+            <li><a class="top chl" data-page="changes" href="#changes"><span>新增组</span></a></li>
+            <li><a class="top chl" data-page="blocked" href="#blocked"><span>已屏蔽</span></a></li>
+            <li><a class="top chl" data-page="unmatched" href="#unmatched"><span>未匹配</span></a></li>
+            <li><a class="top chl real" data-page="settings" href="#settings"><span>设置</span></a></li>
+          </ul>
+        </nav>
+      </div>
+      <div id="headerSearchWrapper">
+        <div id="headerSearch">
+          <form id="search-form" role="search">
+            <div class="inner">
+              <input class="textfield" id="search_text" type="search" autocomplete="off" placeholder="番剧 / 别名" aria-label="搜索番剧">
+              <input class="search" type="submit" value="搜索">
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="idBadgerNeue"><div class="guest"><a id="scan" class="guest login" href="#scan" role="button">立即采集</a></div></div>
+    </div>
+  </header>
+  <main id="main" class="mainWrapper">
+    <div id="header"><h1 id="page-title">番剧</h1></div>
+    <div class="columns clearit">
+      <div id="columnSubjectBrowserA" class="column"><div id="content" aria-busy="true"></div></div>
+      <aside id="columnSubjectBrowserB" class="column" aria-label="筛选与采集状态">
+        <div class="sideInner">
+          <h2 class="subtitle" id="quarter">季度</h2>
+          <ul id="filters" class="grouped clearit" aria-label="番剧范围"></ul>
+          <div class="side-actions"><a id="edit-season" class="l" href="#settings">切换季度</a></div>
+          <h2 class="subtitle">采集状态</h2>
+          <div id="health"></div>
+          <p id="progress" class="tip" aria-live="polite"></p>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+<div id="notice" role="status" hidden></div>
+<script src="/static/app.js?v=20261004-2" defer></script>
+</body>
+</html>
