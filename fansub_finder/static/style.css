@@ -3,6 +3,8 @@
 :root { --finder-error: #b34141; --finder-success: #468054; --finder-line: #e8e8e8; --finder-link: #0084b4; --finder-paper: #fff; --finder-panel: #fafafa; --finder-muted: #888; --finder-mono: Consolas, monospace; }
 html, body { overflow-x: clip; }
 [hidden] { display: none !important; }
+.static-site [data-page=settings], .static-site #edit-season, .static-site .scope-editor { display: none; }
+.static-site #scan { cursor: default; }
 button, input, select, textarea { font: inherit; box-sizing: border-box; }
 a[role=button], button { cursor: pointer; white-space: nowrap; }
 :focus-visible { outline: 2px solid var(--finder-link); outline-offset: 3px; }
@@ -27,6 +29,16 @@ a[role=button], button { cursor: pointer; white-space: nowrap; }
 #progress { padding: 6px 15px 12px; overflow-wrap: anywhere; }
 .side-actions { padding: 0 18px 12px; font-size: 12px; }
 #browserItemList.finder-list > li.item div.inner, #change-items.finder-list > li.item div.inner { margin-left: 100px; min-height: 118px; }
+#blocked-groups.finder-list > li.item > .inner { margin-left: 0; min-height: 0; }
+.blocked-group > summary { cursor: pointer; list-style: none; padding: 4px 0; }
+.blocked-group > summary::-webkit-details-marker { display: none; }
+.blocked-group > summary h3::before { content: '+ '; color: var(--finder-muted); }
+.blocked-group[open] > summary h3::before { content: '− '; }
+.blocked-group .group-preview { padding-top: 8px; overflow-wrap: anywhere; color: var(--finder-muted); }
+.blocked-group[open] > summary .group-preview { display: none; }
+.blocked-reasons { margin-top: 10px; font-size: 11px; line-height: 1.8; color: var(--finder-muted); overflow-wrap: anywhere; }
+.blocked-anime-list { margin-top: 10px; }
+ul.blocked-anime-list > li.item > .inner { min-height: 118px; }
 .finder-list .finder-cover { position: absolute; left: 5px; top: 10px; width: 86px; height: 112px; display: block; }
 .finder-cover .cover-placeholder { display: flex; align-items: center; justify-content: center; width: 78px; height: 104px; background: var(--finder-panel); color: var(--finder-muted); border: 1px solid var(--finder-line); font-size: 11px; }
 .finder-list .finder-cover img.cover { position: absolute; left: 0; top: 0; width: 78px; height: 104px; object-fit: cover; }
@@ -104,6 +116,7 @@ a[role=button], button { cursor: pointer; white-space: nowrap; }
 }
 @media (max-width: 600px) {
   #browserItemList.finder-list > li.item div.inner, #change-items.finder-list > li.item div.inner { margin-left: 72px; min-height: 84px; }
+  ul.blocked-anime-list > li.item > .inner { margin-left: 72px; min-height: 84px; }
   .finder-list .finder-cover { width: 64px; height: 83px; }
   .finder-list .finder-cover img.cover, .finder-cover .cover-placeholder { width: 56px; height: 75px; }
   .finder-list .anime > summary { min-height: 83px; padding-right: 38px; }

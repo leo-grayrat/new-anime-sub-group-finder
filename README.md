@@ -28,7 +28,7 @@
 
 MCP 的 `list_changes` 仍查询首次出现的“番剧＋组”记录。第一次采集建立现有清单，后续集数、重启、解除屏蔽不会重复生成新增记录。
 
-“已屏蔽”保留原始资源和原因，修改规则会重算历史结果。默认名单包括 ANi、黒ネズミたち、Kirara Fantasia、Nix-Raws（含 Nix-Raw）、ToonsHub、Ansgwrt、沸班亚马（含制作组完整名称及Feibanyama）、Skymoon-Raws、YAYOI、Gecko；平台标签包括 CR、Crunchyroll、Baha、Bahamut、巴哈、巴哈姆特、CATCHPLAY、CATCHPLAY+。`WEB-DL` 不屏蔽。没有命中名单不等于已证明字幕原创。
+“已屏蔽”按“字幕组 → 动画”分组，只显示所选季度内发布、属于当季或跨季续播的记录。展开动画可查看原因、集数和资源。季度以前的历史记录仍保留在数据库，修改规则会重算结果。默认名单包括 ANi、黒ネズミたち、Kirara Fantasia、Nix-Raws（含 Nix-Raw）、ToonsHub、Ansgwrt、沸班亚马（含制作组完整名称及Feibanyama）、Skymoon-Raws、YAYOI、Gecko；平台标签包括 CR、Crunchyroll、Baha、Bahamut、巴哈、巴哈姆特、CATCHPLAY、CATCHPLAY+。`WEB-DL` 不屏蔽。没有命中名单不等于已证明字幕原创。
 
 已标明字幕语言且不含中文的资源默认排除，语言未知保留“未标注”。正文简介里的平台、官字说明也参与筛选；中文字幕证据从字幕轨取，不混用音轨语言。每轮按来源补查最多25条当季上传资源的详情，错误会显示在来源状态中。具体核对与排除依据见 [发布组核对记录](docs/group-review.md)。
 
@@ -61,6 +61,10 @@ cwd = "E:\\Project\\Git\\Tool\\new-anime-sub-group-finder"
 stdio 只查询已启动的常驻服务，不另外扫描站点。未启动服务会返回明确错误。不要同时为同一项目配置 HTTP 与 stdio 两个入口。
 
 可询问：“十月新番有哪些可用字幕组？”“最近新增了哪些组？”“某组做到了第几集？”“蜜柑的数据是否过期？”工具为 `list_anime`、`list_groups`、`list_releases`、`list_changes`、`get_status`，均为只读。新增查询返回 `cursor`，下次传入 `after` 增量读取；`has_more=true` 时继续读取下一页，游标只推进到已检查的记录。时间采用 ISO 8601，网页显示本地时间。
+
+## GitHub Pages
+
+已提供只读静态导出及 Actions 工作流，本次尚未发布。使用方式见 [Pages 部署说明](docs/github-pages.md)。Pages 不运行常驻服务或 MCP；公开网页由定时采集生成。
 
 ## Docker
 

@@ -63,6 +63,17 @@ async def main():
         for name, heading in headings.items():
             await page.locator(f'nav [data-page="{name}"]').click()
             await page.get_by_role("heading", name=heading, exact=True).wait_for()
+            if name == "blocked":
+                blocked = await (await page.request.get(url + "/api/blocked")).json()
+                assert await page.locator("details.blocked-group").count() == len(blocked["items"])
+                if blocked["items"]:
+                    await page.locator("details.blocked-group summary").first.click()
+                    await page.locator("[data-blocked-anime]").first.wait_for()
+                    await page.locator("[data-blocked-anime] summary").first.click()
+                    await page.locator(".resources .resource").first.wait_for()
+                    assert await page.locator(".blocked-reasons").count() == 1
+                    assert await page.locator(".blocked-animes .reason").count() == 0
+                await page.screenshot(path=str(output / "blocked.png"), full_page=False)
             if name == "changes":
                 updates = await (await page.request.get(url + "/api/updates")).json()
                 assert await page.locator("details.recent-update").count() == len(updates["items"])
@@ -196,6 +207,7 @@ async def main():
         assert "模拟来源超时" in await page.locator(".source-error").inner_text()
         await page.screenshot(path=str(output / "source-failure.png"), full_page=False)
         await page.unroute("**/api/status", mock_failure)
+
         async def missing_cover(route):
             await route.fulfill(status=404, json={"detail": "封面暂不可用"})
 

@@ -1,4 +1,6 @@
 const $ = (selector) => document.querySelector(selector);
+const staticMode = document.querySelector('meta[name="finder-mode"]')?.content === 'static';
+let publishedData, publishedPromise;
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 const sourceNames = {mikan: '蜜柑', garden: 'AnimeGarden', anibt: 'AniBT', bgm: '放送资料'};
 const scopeNames = {active: '当季与续播', current: '当季首播', continuing: '跨季续播', uncertain: '放送待核实', excluded: '已排除'};
@@ -8,10 +10,58 @@ let cfg, status, keyword = '', scope = 'active', hasGroups = true, viewVersion =
 let updatesRefreshedAt = 0;
 
 async function api(path, options = {}) {
+  if (staticMode) return staticApi(path, options);
   const response = await fetch(path, {...options, headers: {'Content-Type': 'application/json', ...options.headers}});
   const data = await response.json();
   if (!response.ok) throw Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
   return data;
+}
+
+async function staticApi(path, options) {
+  if (options.method && options.method !== 'GET') throw Error('只读网页');
+  if (!publishedPromise) publishedPromise = fetch(new URL('data.json', location.href), {cache: 'no-cache'}).then(async response => {
+    if (!response.ok) throw Error('网页数据加载失败');
+    publishedData = await response.json();
+    return publishedData;
+  }).catch(error => { publishedPromise = null; throw error; });
+  const data = await publishedPromise;
+  const status = structuredClone(data.status);
+  for (const [name, source] of Object.entries(status.sources)) {
+    const age = Date.now() - Date.parse(source.last_success || '');
+    source.stale = source.stale || !Number.isFinite(age) || age > (source.stale_after_seconds || (name === 'bgm' ? 43200 : 1800)) * 1000;
+  }
+  const envelope = items => ({items, status});
+  const url = new URL(path, 'https://finder.invalid');
+  if (url.pathname === '/api/status') return status;
+  if (url.pathname === '/api/anime') {
+    const scope = url.searchParams.get('scope') || 'active';
+    const keyword = (url.searchParams.get('keyword') || '').toLocaleLowerCase();
+    return envelope(data.anime.filter(a =>
+      (scope === 'all' || (scope === 'active' ? ['current', 'continuing'].includes(a.scope) : a.scope === scope)) &&
+      (url.searchParams.get('include_continuing') !== 'false' || a.scope !== 'continuing') &&
+      (url.searchParams.get('has_groups') !== 'true' || a.group_count > 0) &&
+      [a.title, ...a.aliases].some(name => name.toLocaleLowerCase().includes(keyword))
+    ));
+  }
+  if (url.pathname === '/api/blocked') return {...data.blocked, status};
+  if (url.pathname === '/api/unmatched') return {...data.unmatched, status};
+  if (url.pathname === '/api/updates') {
+    const end = Date.now(), start = end - 24 * 3600000;
+    const items = data.updates.items.map(item => {
+      const releases = item.releases.filter(r => Date.parse(r.published_at) >= start && Date.parse(r.published_at) <= end);
+      return {...item, releases, release_count: releases.length, episodes: [...new Set(releases.flatMap(r => r.episodes))].sort((a, b) => Number(a) - Number(b)), updated_at: releases[0]?.published_at};
+    }).filter(item => item.release_count);
+    return {...envelope(items), window_start: new Date(start).toISOString(), window_end: new Date(end).toISOString()};
+  }
+  const match = url.pathname.match(/^\/api\/anime\/(.+)\/(groups|releases)$/);
+  if (match) {
+    const id = decodeURIComponent(match[1]);
+    if (match[2] === 'groups') return envelope(data.groups[id] || []);
+    const group = url.searchParams.get('group');
+    const lists = data.releases[id] || {};
+    return envelope(group ? lists[group] || [] : [...new Map(Object.values(lists).flat().map(r => [r.id, r])).values()]);
+  }
+  throw Error('此功能需要本机服务');
 }
 
 function notice(text) {
@@ -54,8 +104,8 @@ function empty(label) {
 }
 
 function cover(animeId, title, bgmId, coverUrl) {
-  const available = bgmId || coverUrl;
-  const url = `/api/anime/${encodeURIComponent(animeId)}/cover`;
+  const available = staticMode ? publishedData?.covers[animeId] : bgmId || coverUrl;
+  const url = staticMode ? new URL(available || '.', location.href).href : `/api/anime/${encodeURIComponent(animeId)}/cover`;
   const tag = available ? 'a' : 'span';
   return `<${tag} class="subjectCover cover coverPortrait finder-cover${available ? '' : ' unavailable'}" ${available ? `href="${esc(url)}" target="_blank" rel="noopener" title="查看 ${esc(title)} 的封面"` : ''}><span class="cover-placeholder" aria-hidden="true">暂无封面</span>${available ? `<img class="cover" src="${esc(url)}" alt="${esc(title)} 封面" width="78" height="104" loading="lazy" decoding="async">` : ''}</${tag}>`;
 }
@@ -79,8 +129,8 @@ async function health() {
     return `<div class="health ${value.error ? 'error' : value.stale ? '' : 'ready'}" title="最后成功：${esc(time(value.last_success))}"><b>${sourceNames[source] || esc(source)}</b><span>${label}</span>${value.error ? `<div class="source-error">${esc(value.error)}</div>` : ''}</div>`;
   }).join('');
   $('#progress').textContent = status.progress.running ? status.progress.message : `更新于 ${time(status.last_scan)}`;
-  $('#scan').setAttribute('aria-disabled', String(status.progress.running));
-  $('#scan').textContent = status.progress.running ? '采集中' : '立即采集';
+  $('#scan').setAttribute('aria-disabled', String(staticMode || status.progress.running));
+  $('#scan').textContent = staticMode ? '只读快照' : status.progress.running ? '采集中' : '立即采集';
 }
 
 function description(r) {
@@ -89,7 +139,11 @@ function description(r) {
 }
 
 function resource(r) {
-  return `<div class="resource"><div class="resource-title">${esc(r.title)}</div><div class="meta">${esc((r.languages || []).join(' / ') || '语言未标注')} / ${esc(r.resolution || '画质未标注')} / ${esc(time(r.published_at))}</div>${r.reasons?.length ? `<div class="reason">${esc(r.reasons.join('；'))}</div>` : ''}<div class="links">${(r.origins || []).map(o => link(o.url, sourceNames[o.source] || o.source)).join('')}${link(r.magnet, '磁力')}${link(r.torrent, '种子')}${r.magnet ? `<a href="#copy" role="button" class="chiiBtn copy" data-copy="${esc(r.magnet)}">复制磁力</a>` : ''}</div>${description(r)}</div>`;
+  return renderResource(r, true);
+}
+
+function renderResource(r, showReasons) {
+  return `<div class="resource"><div class="resource-title">${esc(r.title)}</div><div class="meta">${esc((r.languages || []).join(' / ') || '语言未标注')} / ${esc(r.resolution || '画质未标注')} / ${esc(time(r.published_at))}</div>${showReasons && r.reasons?.length ? `<div class="reason">${esc(r.reasons.join('；'))}</div>` : ''}<div class="links">${(r.origins || []).map(o => link(o.url, sourceNames[o.source] || o.source)).join('')}${link(r.magnet, '磁力')}${link(r.torrent, '种子')}${r.magnet ? `<a href="#copy" role="button" class="chiiBtn copy" data-copy="${esc(r.magnet)}">复制磁力</a>` : ''}</div>${description(r)}</div>`;
 }
 
 async function animePage() {
@@ -144,11 +198,32 @@ async function changesPage() {
 }
 
 async function recordsPage(blocked) {
+  if (blocked) return blockedPage();
   const version = ++viewVersion;
   const data = await api(blocked ? '/api/blocked' : '/api/unmatched');
   if (version !== viewVersion || page !== (blocked ? 'blocked' : 'unmatched')) return;
   $('#page-title').textContent = blocked ? '已屏蔽记录' : '未匹配资源';
   $('#content').innerHTML = `<div id="browserTools" class="clearit"><span>${data.total} 条${data.total > data.items.length ? ' / 当前展示 ' + data.items.length : ''}</span></div>` + (data.items.length ? data.items.map(resource).join('') : empty('暂无记录'));
+}
+
+async function blockedPage() {
+  const version = ++viewVersion;
+  const data = await api('/api/blocked');
+  if (version !== viewVersion || page !== 'blocked') return;
+  $('#page-title').textContent = '已屏蔽记录';
+  $('#content').innerHTML = `<div id="browserTools" class="clearit"><span>${data.items.length} 组 / ${data.total} 条</span><span class="tip">${esc(seasonName(data.season))}</span></div>` + (data.items.length ? `<ul id="blocked-groups" class="browserFull finder-list">${data.items.map((g, i) => `<li class="item ${i % 2 ? 'even' : 'odd'} clearit"><div class="inner"><details class="blocked-group" data-blocked-group="${i}"><summary><h3 class="anime-title">${esc(g.group_name)} <small class="grey">${g.anime_count} 部 / ${g.release_count} 条</small></h3><p class="group-preview">${esc(g.animes.map(a => a.title).join(' / '))}</p></summary><div class="blocked-animes"></div></details></div></li>`).join('')}</ul>` : empty('本季度暂无相关屏蔽记录'));
+  $('#content').querySelectorAll('[data-blocked-group]').forEach(el => el.addEventListener('toggle', () => {
+    if (!el.open || el.dataset.loaded) return;
+    el.dataset.loaded = '1';
+    const group = data.items[Number(el.dataset.blockedGroup)];
+    const area = el.querySelector('.blocked-animes');
+    area.innerHTML = `<p class="blocked-reasons">${esc([...new Set(group.animes.flatMap(a => a.reasons))].join('；'))}</p><ul class="browserFull finder-list blocked-anime-list">${group.animes.map((a, i) => `<li class="item clearit">${cover(a.id, a.title, a.bgm_id, a.cover_url)}<div class="inner"><details class="anime" data-blocked-anime="${i}"><summary><h3 class="anime-title">${esc(a.title)}</h3><p class="info tip">集数 ${esc(episodeText(a.episodes))}</p><span class="group-count"><strong>${a.releases.length}</strong>条</span></summary><div class="detail resources"></div></details></div></li>`).join('')}</ul>`;
+    area.querySelectorAll('[data-blocked-anime]').forEach(detail => detail.addEventListener('toggle', () => {
+      if (!detail.open || detail.dataset.loaded) return;
+      detail.dataset.loaded = '1';
+      detail.querySelector('.resources').innerHTML = group.animes[Number(detail.dataset.blockedAnime)].releases.map(r => renderResource(r, false)).join('');
+    }));
+  }));
 }
 
 async function settingsPage() {
@@ -198,6 +273,7 @@ async function render() {
 }
 
 function navigate(next) {
+  if (staticMode && next === 'settings') next = 'anime';
   page = next;
   viewVersion++;
   document.querySelectorAll('nav [data-page]').forEach(a => {
@@ -214,6 +290,7 @@ function navigate(next) {
 }
 
 async function startScan(full = false) {
+  if (staticMode) return;
   if (status?.progress.running) return;
   try {
     const data = await api('/api/scan?full=' + full, {method: 'POST'});
@@ -245,6 +322,8 @@ document.addEventListener('error', event => {
 document.addEventListener('keydown', event => {
   if (event.key === ' ' && event.target.matches('a[role=button]')) { event.preventDefault(); event.target.click(); }
 });
+document.body.classList.toggle('static-site', staticMode);
+if (staticMode) document.querySelectorAll('[data-page="settings"], #edit-season').forEach(el => el.hidden = true);
 navigate(page);
 setInterval(async () => {
   try {
