@@ -14,7 +14,7 @@ a[role=button], button { cursor: pointer; white-space: nowrap; }
 #scan[aria-disabled=true] { opacity: .5; cursor: wait; }
 #page-title { overflow-wrap: anywhere; }
 #columnSubjectBrowserA #content { min-width: 0; width: 100%; float: none; margin: 0; box-sizing: border-box; }
-#browserTools { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#browserTools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 #browserTools label { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 #browserTools input { accent-color: var(--primary-color); }
 #columnSubjectBrowserB #health { padding: 6px 15px; }
@@ -26,7 +26,7 @@ a[role=button], button { cursor: pointer; white-space: nowrap; }
 .source-error { width: 100%; font-size: 11px; overflow-wrap: anywhere; }
 #progress { padding: 6px 15px 12px; overflow-wrap: anywhere; }
 .side-actions { padding: 0 18px 12px; font-size: 12px; }
-#browserItemList.finder-list > li.item div.inner { margin-left: 0; }
+#browserItemList.finder-list > li.item div.inner, #change-items.finder-list > li.item div.inner { margin-left: 0; }
 .anime > summary { list-style: none; cursor: pointer; position: relative; padding: 3px 55px 3px 0; }
 .anime > summary::-webkit-details-marker { display: none; }
 .anime-title { color: var(--finder-link); }

@@ -94,6 +94,13 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
     async def changes(after: int = 0, since: str | None = None, season: str | None = None):
         return query.list_changes(after, since, season)
 
+    @app.get("/api/updates")
+    async def updates(season: str | None = None):
+        try:
+            return query.list_updates(season)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+
     @app.get("/api/blocked")
     async def blocked():
         items = store.releases(blocked=True)

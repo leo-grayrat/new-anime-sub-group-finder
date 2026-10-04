@@ -2,9 +2,10 @@ const $ = (selector) => document.querySelector(selector);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 const sourceNames = {mikan: '蜜柑', garden: 'AnimeGarden', anibt: 'AniBT', bgm: '放送资料'};
 const scopeNames = {active: '当季与续播', current: '当季首播', continuing: '跨季续播', uncertain: '放送待核实', excluded: '已排除'};
-const pageNames = {anime: '番剧', changes: '新增字幕组', blocked: '已屏蔽记录', unmatched: '未匹配资源', settings: '设置'};
+const pageNames = {anime: '番剧', changes: '近 24h 更新', blocked: '已屏蔽记录', unmatched: '未匹配资源', settings: '设置'};
 let page = pageNames[location.hash.slice(1)] ? location.hash.slice(1) : 'anime';
 let cfg, status, keyword = '', scope = 'active', hasGroups = true, viewVersion = 0, noticeTimer;
+let updatesRefreshedAt = 0;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {...options, headers: {'Content-Type': 'application/json', ...options.headers}});
@@ -123,25 +124,16 @@ async function animePage() {
 
 async function changesPage() {
   const version = ++viewVersion;
-  $('#page-title').textContent = '新增字幕组';
-  $('#content').innerHTML = '<ul id="change-items" class="browserFull finder-list"></ul><a href="#more" class="chiiBtn" id="more-changes" role="button" hidden>更多</a>';
-  let cursor = 0, count = 0, loading = false;
-  async function load() {
-    if (loading) return;
-    loading = true;
-    try {
-      const data = await api('/api/changes?after=' + cursor);
-      if (version !== viewVersion || page !== 'changes') return;
-      cursor = data.cursor;
-      $('#change-items').insertAdjacentHTML('beforeend', data.items.map((c, i) => `<li class="item ${(count + i) % 2 ? 'even' : 'odd'} clearit"><div class="inner"><h3 class="anime-title">${esc(c.anime_title)} <small class="grey">${esc(c.group_name)}</small></h3><p class="info tip">${esc(time(c.discovered_at))} / 集数 ${esc(episodeText(c.episodes))}</p></div></li>`).join(''));
-      count += data.items.length;
-      $('#more-changes').hidden = !data.has_more;
-      if (!count && !data.has_more) $('#change-items').innerHTML = empty('暂无新增组');
-    } catch (error) { notice(error.message); }
-    finally { loading = false; }
-  }
-  $('#more-changes').onclick = event => { event.preventDefault(); load(); };
-  await load();
+  const data = await api('/api/updates');
+  if (version !== viewVersion || page !== 'changes') return;
+  updatesRefreshedAt = Date.now();
+  $('#page-title').textContent = pageNames.changes;
+  $('#content').innerHTML = `<div id="browserTools" class="clearit"><span>${data.items.length} 组更新</span><span class="tip">${esc(time(data.window_start))} — ${esc(time(data.window_end))}</span></div>` + (data.items.length ? `<ul id="change-items" class="browserFull finder-list">${data.items.map((c, i) => `<li class="item ${i % 2 ? 'even' : 'odd'} clearit"><div class="inner"><details class="anime recent-update" data-update="${i}"><summary><h3 class="anime-title">${esc(c.anime_title)}</h3><p class="group-preview">${esc(c.group_name)}</p><p class="info tip">${esc(time(c.updated_at))} / 更新集数 ${esc(episodeText(c.episodes))}</p><span class="group-count"><strong>${c.release_count}</strong>条</span></summary><div class="detail resources"></div></details></div></li>`).join('')}</ul>` : empty('近 24 小时暂无更新'));
+  $('#content').querySelectorAll('[data-update]').forEach(el => el.addEventListener('toggle', () => {
+    if (!el.open || el.dataset.loaded) return;
+    el.dataset.loaded = '1';
+    el.querySelector('.resources').innerHTML = data.items[Number(el.dataset.update)].releases.map(resource).join('');
+  }));
 }
 
 async function recordsPage(blocked) {
@@ -244,5 +236,6 @@ setInterval(async () => {
     const wasRunning = status?.progress.running;
     await health();
     if ((wasRunning || status.progress.running) && page === 'anime' && !document.querySelector('details[open]') && document.activeElement?.id !== 'search_text') await animePage();
+    if (page === 'changes' && (wasRunning || status.progress.running || Date.now() - updatesRefreshedAt >= 60000) && !document.querySelector('details[open]')) await changesPage();
   } catch (error) { notice('服务连接失败：' + error.message); }
 }, 8000);

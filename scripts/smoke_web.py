@@ -21,11 +21,11 @@ async def main():
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         await page.goto(url)
-        await page.locator("details.anime").first.wait_for()
+        await page.locator("details.anime[data-anime]").first.wait_for()
         assert await page.locator('link[href="/static/vendor/bangumi-r771.css"]').count() == 1
         await page.screenshot(path=str(output / "anime-list.png"), full_page=False)
-        anime_count = await page.locator("details.anime").count()
-        await page.locator("details.anime summary").first.click()
+        anime_count = await page.locator("details.anime[data-anime]").count()
+        await page.locator("details.anime[data-anime] summary").first.click()
         await page.locator("details.group").first.wait_for()
         await page.locator("details.group summary").first.click()
         await page.locator(".resources .resource").first.wait_for()
@@ -35,7 +35,7 @@ async def main():
         assert any(link.startswith("https:") for link in links)
         await page.screenshot(path=str(output / "anime.png"), full_page=False)
         headings = {
-            "changes": "新增字幕组",
+            "changes": "近 24h 更新",
             "blocked": "已屏蔽记录",
             "unmatched": "未匹配资源",
             "settings": "设置",
@@ -43,6 +43,14 @@ async def main():
         for name, heading in headings.items():
             await page.locator(f'nav [data-page="{name}"]').click()
             await page.get_by_role("heading", name=heading, exact=True).wait_for()
+            if name == "changes":
+                updates = await (await page.request.get(url + "/api/updates")).json()
+                assert await page.locator("details.recent-update").count() == len(updates["items"])
+                if updates["items"]:
+                    await page.locator("details.recent-update summary").first.click()
+                    await page.locator(".resources .resource").first.wait_for()
+                    assert await page.locator(".resources .resource").count() == updates["items"][0]["release_count"]
+                await page.screenshot(path=str(output / "updates.png"), full_page=False)
             if name == "settings":
                 await page.locator("#platforms").wait_for()
                 assert "CATCHPLAY" in await page.locator("#platforms").input_value()
@@ -70,14 +78,14 @@ async def main():
         await page.unroute("**/api/config", inspect_save)
         await page.locator("#notice").evaluate("e => e.hidden = true")
         await page.locator('nav [data-page="anime"]').click()
-        await page.locator("details.anime").first.wait_for()
+        await page.locator("details.anime[data-anime]").first.wait_for()
         await page.locator("#search_text").fill("冰之城墙")
         await page.locator("#search_text").press("Enter")
-        await page.wait_for_function("document.querySelectorAll('details.anime').length === 1")
+        await page.wait_for_function("document.querySelectorAll('details.anime[data-anime]').length === 1")
         assert "冰之城墙" in await page.locator(".anime-title").inner_text()
         await page.locator("#search_text").fill("")
         await page.locator("#search_text").press("Enter")
-        await page.wait_for_function("document.querySelectorAll('details.anime').length > 1")
+        await page.wait_for_function("document.querySelectorAll('details.anime[data-anime]').length > 1")
         await page.locator('[data-scope="continuing"]').click()
         await page.wait_for_function(
             "document.querySelector('#browserTools').textContent.includes('跨季续播')"
@@ -113,7 +121,7 @@ async def main():
             await page.screenshot(
                 path=str(output / f"mobile-{width}.png"), full_page=False, animations="disabled"
             )
-            await page.locator("details.anime summary").first.click()
+            await page.locator("details.anime[data-anime] summary").first.click()
             await page.locator("details.group").first.wait_for()
             await page.locator("details.group summary").first.click()
             await page.locator(".resources .resource").first.wait_for()
@@ -125,8 +133,22 @@ async def main():
             assert await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), (
                 f"{width}px设置超出视口"
             )
+            await page.locator('nav [data-page="changes"]').click()
+            await page.get_by_role("heading", name="近 24h 更新", exact=True).wait_for()
+            if await page.locator("details.recent-update").count():
+                await page.locator("details.recent-update summary").first.click()
+                await page.locator(".resources .resource").first.wait_for()
+                assert await page.locator(".group-count").first.evaluate(
+                    "e => e.getBoundingClientRect().right <= window.innerWidth"
+                ), f"{width}px更新条数被裁切"
+            assert await page.locator("#content").evaluate(
+                "e => e.getBoundingClientRect().right <= window.innerWidth"
+            ), f"{width}px更新列表被裁切"
+            await page.screenshot(
+                path=str(output / f"updates-mobile-{width}.png"), full_page=False, animations="disabled"
+            )
             await page.locator('nav [data-page="anime"]').click()
-            await page.locator("details.anime").first.wait_for()
+            await page.locator("details.anime[data-anime]").first.wait_for()
         await page.set_viewport_size({"width": 1440, "height": 1000})
         await page.evaluate("window.scrollTo(0, 0)")
         failure_status = await (await page.request.get(url + "/api/status")).json()
@@ -138,8 +160,8 @@ async def main():
 
         await page.route("**/api/status", mock_failure)
         await page.goto(url)
-        await page.locator("details.anime").first.wait_for()
-        assert await page.locator("details.anime").count() == anime_count
+        await page.locator("details.anime[data-anime]").first.wait_for()
+        assert await page.locator("details.anime[data-anime]").count() == anime_count
         assert "模拟来源超时" in await page.locator(".source-error").inner_text()
         await page.screenshot(path=str(output / "source-failure.png"), full_page=False)
         await page.unroute("**/api/status", mock_failure)

@@ -110,3 +110,55 @@ class QueryService:
             is not None
         )
         return {**self.envelope(result), "cursor": cursor, "has_more": has_more}
+
+    def list_updates(self, season=None):
+        season = season or self.monitor.config.season
+        quarter_bounds(season)
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(hours=24)
+        anime = {a.id: a for a in self.store.animes() if scope_for(a, season) in ["current", "continuing"]}
+        result = {}
+        for release in self.store.releases():
+            a = anime.get(release["anime_id"])
+            if not a:
+                continue
+            # Deduplicated resources may carry several sites' publication dates.
+            published = {}
+            for origin in release["origins"]:
+                try:
+                    timestamp = datetime.fromisoformat(origin["published_at"].replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=timezone.utc)
+                timestamp = timestamp.astimezone(timezone.utc)
+                if not start <= timestamp <= end:
+                    continue
+                group_id = group_key(origin["group"])
+                if group_id not in published or timestamp > published[group_id][0]:
+                    published[group_id] = (timestamp, origin["group"])
+            for group_id, (timestamp, name) in published.items():
+                item = result.setdefault(
+                    (a.id, group_id),
+                    {
+                        "anime_id": a.id,
+                        "anime_title": a.title,
+                        "group_id": group_id,
+                        "group_name": name,
+                        "updated_at": timestamp.isoformat(),
+                        "episodes": set(),
+                        "releases": [],
+                    },
+                )
+                item["updated_at"] = max(item["updated_at"], timestamp.isoformat())
+                item["episodes"].update(release["episodes"])
+                item["releases"].append({**release, "published_at": timestamp.isoformat()})
+        items = list(result.values())
+        for item in items:
+            item["episodes"] = sorted(item["episodes"], key=float)
+            item["release_count"] = len(item["releases"])
+            item["releases"].sort(key=lambda release: release["published_at"], reverse=True)
+        items.sort(
+            key=lambda item: (item["updated_at"], item["anime_title"], item["group_name"]), reverse=True
+        )
+        return {**self.envelope(items), "window_start": start.isoformat(), "window_end": end.isoformat()}
