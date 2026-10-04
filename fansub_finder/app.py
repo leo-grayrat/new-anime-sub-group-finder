@@ -112,9 +112,11 @@ def create_app(config=None, config_path="config.json", start_monitor=True):
             raise HTTPException(422, str(e)) from e
 
     @app.get("/api/blocked")
-    async def blocked():
-        items = store.releases(blocked=True)
-        return {**query.envelope(items[:500]), "total": len(items)}
+    async def blocked(season: str | None = None):
+        try:
+            return query.list_blocked(season)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
 
     @app.get("/api/unmatched")
     async def unmatched():

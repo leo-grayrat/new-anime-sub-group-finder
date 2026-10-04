@@ -14,7 +14,14 @@ def test_queries_and_settings_reclassification_do_not_create_changes(tmp_path):
         store = app.state.monitor.store
         store.upsert_anime(Anime(id="bgm:1", title="新番", premiere="2026-10-01"))
         store.ingest(
-            Release(source="anibt", source_id="1", anime_id="bgm:1", group="好组", title="[好组] 新番 [01]"),
+            Release(
+                source="anibt",
+                source_id="1",
+                anime_id="bgm:1",
+                group="好组",
+                title="[好组] 新番 [01]",
+                published_at="2026-10-01",
+            ),
             Rules(),
             baseline=True,
         )
@@ -50,7 +57,8 @@ def test_restart_applies_configuration_to_persisted_resources(tmp_path):
         )
     second = create_app(config.model_copy(update={"groups": ["好组"]}), start_monitor=False)
     with TestClient(second) as client:
-        assert len(client.get("/api/blocked").json()["items"]) == 1
+        assert len(second.state.monitor.store.releases(blocked=True)) == 1
+        assert client.get("/api/blocked").json()["items"] == []
 
 
 def test_historical_quarter_drilldown_and_review_settings(tmp_path):

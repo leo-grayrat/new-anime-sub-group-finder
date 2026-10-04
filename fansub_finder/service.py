@@ -164,3 +164,61 @@ class QueryService:
             key=lambda item: (item["updated_at"], item["anime_title"], item["group_name"]), reverse=True
         )
         return {**self.envelope(items), "window_start": start.isoformat(), "window_end": end.isoformat()}
+
+    def list_blocked(self, season=None):
+        season = season or self.monitor.config.season
+        start, end = quarter_bounds(season)
+        local_tz = timezone(timedelta(hours=8))
+        start = datetime.fromisoformat(start).replace(tzinfo=local_tz)
+        end = datetime.fromisoformat(end).replace(tzinfo=local_tz)
+        anime = {a.id: a for a in self.store.animes() if scope_for(a, season) in ["current", "continuing"]}
+        grouped = {}
+        display_names = {
+            group_key(name): name
+            for name in [*self.monitor.config.groups, *self.monitor.config.review_groups]
+        }
+        resource_ids = set()
+        for release in self.store.releases(blocked=True):
+            a = anime.get(release["anime_id"])
+            if not a:
+                continue
+            names = {}
+            for origin in release["origins"]:
+                try:
+                    published = datetime.fromisoformat(origin["published_at"].replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if published.tzinfo is None:
+                    published = published.replace(tzinfo=timezone.utc)
+                if start <= published < end:
+                    key = group_key(origin["group"])
+                    names.setdefault(key, origin["group"])
+            for key, name in names.items():
+                name = display_names.get(key, name)
+                group = grouped.setdefault(key, {"group_id": key, "group_name": name, "animes": {}})
+                item = group["animes"].setdefault(
+                    a.id,
+                    {
+                        "id": a.id,
+                        "title": a.title,
+                        "bgm_id": a.bgm_id,
+                        "cover_url": a.cover_url,
+                        "episodes": set(),
+                        "reasons": set(),
+                        "releases": [],
+                    },
+                )
+                item["episodes"].update(release["episodes"])
+                item["reasons"].update(release["reasons"])
+                item["releases"].append(release)
+                resource_ids.add(release["id"])
+        items = list(grouped.values())
+        for group in items:
+            group["animes"] = sorted(group["animes"].values(), key=lambda a: a["title"])
+            group["anime_count"] = len(group["animes"])
+            group["release_count"] = sum(len(a["releases"]) for a in group["animes"])
+            for a in group["animes"]:
+                a["episodes"] = sorted(a["episodes"], key=float)
+                a["reasons"] = sorted(a["reasons"])
+        items.sort(key=lambda g: (-g["anime_count"], -g["release_count"], g["group_id"]))
+        return {**self.envelope(items), "total": len(resource_ids), "season": season}
