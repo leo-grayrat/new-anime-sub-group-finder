@@ -36,4 +36,7 @@ class Release(BaseModel):
     subtitle: str = ""
     tags: list[str] = Field(default_factory=list)
     site_groups: list[str] = Field(default_factory=list)
+    description: str = ""
+    description_url: str = ""
+    description_checked_at: str | None = None
     raw: dict = Field(default_factory=dict)

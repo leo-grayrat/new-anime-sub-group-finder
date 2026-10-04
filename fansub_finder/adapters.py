@@ -46,6 +46,43 @@ def enrich(r):
     return r
 
 
+def parse_release_description(html, source, r):
+    soup = BeautifulSoup(html, "html.parser")
+    selector = {"mikan": ".episode-desc", "anibt": ".prose", "garden": ".topic-nfo"}[source]
+    body = soup.select_one(selector)
+    if body is None:
+        raise ValueError(f"{source} 详情页缺少发布说明，不能视为已核实")
+    for tag in body.select("script,style"):
+        tag.decompose()
+    r.description = body.get_text("\n", strip=True)[:50000]
+    # Only inspect the subtitle track block; Chinese audio and credits are not subtitle evidence.
+    match = re.search(
+        r"(?:subtitles?(?:\s*\(\d+\))?|字幕(?:语言|語言|轨道|軌道)?)\s*[:：\n](.*?)(?=\n(?:chapters?|duration|checksums?|audio|video|音频|视频|音軌|章節)\b|$)",
+        r.description,
+        re.I | re.S,
+    )
+    if match:
+        block = match.group(1)
+        patterns = {
+            "CHS": r"Chinese\s*\(Simplified\)|简体|簡體|\bCHS\b|zh[-_]Hans",
+            "CHT": r"Chinese\s*\(Traditional\)|繁体|繁體|\bCHT\b|zh[-_]Hant",
+            "ZH": r"中文|\bChinese\b",
+            "EN": r"\bEnglish\b|英语|英語",
+            "ID": r"\bIndonesian\b|印尼",
+            "JA": r"\bJapanese\b|日语|日語",
+            "KO": r"\bKorean\b|韩语|韓語",
+            "FR": r"\bFrench\b",
+        }
+        found = [lang for lang, pattern in patterns.items() if re.search(pattern, block, re.I)]
+        if found:
+            r.languages = sorted(set(r.languages + found))
+    r.description_url = r.url
+    from .store import now
+
+    r.description_checked_at = now()
+    return r
+
+
 def parse_mikan_catalog(html, season, host):
     soup = BeautifulSoup(html, "html.parser")
     result = {}
@@ -279,6 +316,7 @@ def parse_feed(content, source, anime_id=None):
             published_at=iso(entry.get("published", "")),
             resolution=entry.get("anibt_resolution", ""),
             subtitle=entry.get("anibt_subtitle", ""),
+            description=BeautifulSoup(text, "html.parser").get_text("\n", strip=True),
             raw={
                 k: v
                 for k, v in entry.items()

@@ -22,6 +22,8 @@ class QueryService:
             status["baseline_complete"] = (
                 bool(last) if source == "bgm" else self.store.get_state(f"baseline:{source}", False)
             )
+            status["details"] = self.store.get_state(f"details:{source}", {})
+            status["error"] = status.get("error") or status["details"].get("error")
             statuses[source] = status
         return {
             "sources": statuses,

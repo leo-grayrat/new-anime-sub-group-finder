@@ -6,7 +6,17 @@ from urllib.parse import parse_qs, urlsplit
 
 from .models import Anime, Release
 
-DEFAULT_GROUPS = ["ANi", "黒ネズミたち", "Kirara Fantasia", "Nix-Raws", "ToonsHub", "Ansgwrt", "沸班亚马"]
+DEFAULT_GROUPS = [
+    "ANi",
+    "黒ネズミたち",
+    "Kirara Fantasia",
+    "Nix-Raws",
+    "ToonsHub",
+    "Ansgwrt",
+    "沸班亚马",
+    "Skymoon-Raws",
+    "YAYOI",
+]
 DEFAULT_PLATFORMS = ["CR", "Crunchyroll", "Baha", "Bahamut", "巴哈", "巴哈姆特", "CATCHPLAY", "CATCHPLAY+"]
 GROUP_ALIASES = {
     "nix-raw": "nix-raws",
@@ -18,6 +28,9 @@ GROUP_ALIASES = {
     "kitauji sub": "北宇治字幕组",
     "北宇治字幕組": "北宇治字幕组",
     "終末字幕組": "终末字幕组",
+    "沸班亚马制作组": "沸班亚马",
+    "沸班亞馬製作組": "沸班亚马",
+    "feibanyama": "沸班亚马",
 }
 
 
@@ -36,6 +49,32 @@ def site_labels(r: Release) -> list[str]:
         if isinstance(r.raw.get(key), str):
             labels.append(r.raw[key])
     return labels
+
+
+def has_chinese(languages):
+    return any(
+        str(lang).casefold()
+        in {
+            "chs",
+            "cht",
+            "zh",
+            "zho",
+            "chi",
+            "zh-cn",
+            "zh-tw",
+            "zh-hans",
+            "zh-hant",
+            "sc",
+            "tc",
+            "chinese",
+            "中文",
+            "简体",
+            "簡體",
+            "繁体",
+            "繁體",
+        }
+        for lang in languages
+    )
 
 
 def title_group(title: str) -> str:
@@ -135,7 +174,7 @@ class Rules:
         for banned in self.groups:
             if group_key(banned) in {group_key(x) for x in labels if x}:
                 reasons.append(f"发布组黑名单：{banned}")
-        text = " ".join([r.title, *r.tags])
+        text = " ".join([r.title, *r.tags, r.description])
         for tag in self.platforms:
             # ASCII token boundaries protect Crimson/Anima and accept CR_WEB-DL.
             pat = r"(?<![A-Za-z0-9])" + re.escape(tag) + r"(?![A-Za-z0-9])"
@@ -145,4 +184,7 @@ class Rules:
             reasons.append("明确标注官方字幕")
         if r.subtitle.upper() == "NONE" or re.search(r"无字幕|無字幕|生肉|\bNO[ ._-]?SUBS?\b", text, re.I):
             reasons.append("明确无字幕")
+        known = [lang for lang in r.languages if lang.upper() not in ["MULTI", "UND", "UNKNOWN"]]
+        if known and not has_chinese(known):
+            reasons.append("已标注字幕语言不含中文")
         return reasons

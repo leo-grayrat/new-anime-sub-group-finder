@@ -3,6 +3,7 @@ import logging
 import re
 import time
 import unicodedata
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -14,10 +15,11 @@ from .adapters import (
     parse_garden_resources,
     parse_mikan_catalog,
     parse_mikan_detail,
+    parse_release_description,
 )
-from .models import Anime
+from .models import Anime, Release
 from .network import Network
-from .rules import Rules, quarter_bounds, scope_for
+from .rules import Rules, group_key, quarter_bounds, scope_for
 from .store import now
 
 log = logging.getLogger(__name__)
@@ -306,6 +308,46 @@ class Monitor:
             if newest:
                 self.store.set_state("checkpoint:garden", newest)
 
+    async def inspect_descriptions(self, source):
+        start, _ = quarter_bounds(self.config.season)
+        active = {
+            a.id for a in self.relevant() if scope_for(a, self.config.season) in ["current", "continuing"]
+        }
+        rows = self.store.db.execute(
+            "SELECT data FROM origins WHERE source=? ORDER BY first_seen DESC", (source,)
+        ).fetchall()
+        inspected_groups = set()
+        count, errors = 0, []
+        for row in rows:
+            r = Release.model_validate_json(row[0])
+            if r.anime_id not in active or r.description_checked_at:
+                continue
+            if r.published_at and r.published_at[:10] < start:
+                continue
+            reasons = self.rules.check(r)
+            if any(reason != "已标注字幕语言不含中文" for reason in reasons):
+                continue
+            if source == "garden" and urlsplit(r.url).hostname not in ["share.dmhy.org", "dmhy.org"]:
+                continue
+            key = (r.anime_id, group_key(r.group))
+            if key in inspected_groups or not r.url:
+                continue
+            inspected_groups.add(key)
+            count += 1
+            self.progress[source] = f"发布说明核对 {count}/25：{r.group}"
+            try:
+                html = await self.net.text(r.url)
+                parse_release_description(html, source, r)
+                self.store.ingest(r, self.rules, baseline=True, season=self.config.season)
+            except Exception as error:
+                errors.append(f"{r.url}: {str(error)[:250]}")
+            if count >= 25:
+                break
+        self.store.set_state(
+            f"details:{source}",
+            {"last_attempt": now(), "checked": count, "error": "; ".join(errors[:3]) or None},
+        )
+
     async def scan(self, full=False):
         async with self.lock:
             self.progress = {"running": True, "message": "正在采集", "started_at": now()}
@@ -359,6 +401,7 @@ class Monitor:
                             elif not catalog_due:
                                 await self.catalog_mikan()
                         await self.recent(source, baseline)
+                        await self.inspect_descriptions(source)
                         if due:
                             self.store.set_state(daily_key, time.time())
                         self.store.set_state(f"baseline:{source}", True)

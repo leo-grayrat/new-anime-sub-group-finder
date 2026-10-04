@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .models import Anime, Release
-from .rules import episodes, group_key, normalize_infohash, scope_for, site_labels, title_group
+from .rules import episodes, group_key, has_chinese, normalize_infohash, scope_for, site_labels, title_group
 
 
 def now():
@@ -123,6 +123,9 @@ class Store:
         if old:
             previous = Release.model_validate_json(old[0])
             r = r.model_copy(deep=True)
+            if previous.description_checked_at and not r.description_checked_at:
+                extra = r.description if r.description and r.description not in previous.description else ""
+                r.description = (previous.description + ("\n" + extra if extra else ""))[:50000]
             if r.group in ["", "未署名"] and previous.group not in ["", "未署名"]:
                 r.group = previous.group
             for field in [
@@ -134,6 +137,9 @@ class Store:
                 "subtitle",
                 "anime_id",
                 "published_at",
+                "description",
+                "description_url",
+                "description_checked_at",
             ]:
                 if not getattr(r, field):
                     setattr(r, field, getattr(previous, field))
@@ -258,6 +264,9 @@ class Store:
                 "reasons": reasons,
                 "origins": [origin],
             }
+        for r in result.values():
+            if has_chinese(r["languages"]):
+                r["reasons"] = [reason for reason in r["reasons"] if reason != "已标注字幕语言不含中文"]
         return [
             r
             for r in result.values()
