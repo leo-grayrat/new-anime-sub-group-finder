@@ -5,7 +5,7 @@
   "catalog_hours": 6,
   "groups": ["ANi", "黒ネズミたち", "Kirara Fantasia", "Nix-Raws", "ToonsHub", "Ansgwrt", "沸班亚马", "Skymoon-Raws", "YAYOI", "Gecko"],
   "platforms": ["CR", "Crunchyroll", "Baha", "Bahamut", "巴哈", "巴哈姆特", "CATCHPLAY", "CATCHPLAY+"],
-  "review_groups": ["NEST"],
+  "review_groups": ["NEST", "生肉/不明字幕"],
   "mikan_host": "https://mikanani.me",
   "data_dir": "data"
 }

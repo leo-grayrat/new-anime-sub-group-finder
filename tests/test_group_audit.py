@@ -11,6 +11,9 @@ def test_insufficiently_documented_group_is_pending_and_can_be_reviewed():
     assert any("待核实" in reason for reason in Rules().check(r))
     assert not Rules(review_groups=[]).check(r)
     assert not Rules().check(r.model_copy(update={"group": "SweetSub", "title": "[SweetSub] 番 - 01"}))
+    bucket = r.model_copy(update={"group": "生肉/不明字幕", "title": "未来少年柯南.英文+法文"})
+    assert any("待核实" in reason for reason in Rules().check(bucket))
+    assert not Rules(review_groups=[]).check(bucket)
 
 
 async def test_continuing_series_hides_inactive_archival_groups_but_keeps_history(tmp_path):

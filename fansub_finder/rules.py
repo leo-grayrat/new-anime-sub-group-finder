@@ -19,7 +19,7 @@ DEFAULT_GROUPS = [
     "Gecko",
 ]
 DEFAULT_PLATFORMS = ["CR", "Crunchyroll", "Baha", "Bahamut", "巴哈", "巴哈姆特", "CATCHPLAY", "CATCHPLAY+"]
-DEFAULT_REVIEW_GROUPS = ["NEST"]
+DEFAULT_REVIEW_GROUPS = ["NEST", "生肉/不明字幕"]
 GROUP_ALIASES = {
     "nix-raw": "nix-raws",
     "nix raws": "nix-raws",
