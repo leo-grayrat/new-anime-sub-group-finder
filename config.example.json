@@ -3,7 +3,7 @@
   "proxy": "http://127.0.0.1:7897",
   "poll_minutes": 10,
   "catalog_hours": 6,
-  "groups": ["ANi", "黒ネズミたち", "Kirara Fantasia", "Nix-Raws", "ToonsHub", "Ansgwrt", "沸班亚马"],
+  "groups": ["ANi", "黒ネズミたち", "Kirara Fantasia", "Nix-Raws", "ToonsHub", "Ansgwrt", "沸班亚马", "Skymoon-Raws", "YAYOI"],
   "platforms": ["CR", "Crunchyroll", "Baha", "Bahamut", "巴哈", "巴哈姆特", "CATCHPLAY", "CATCHPLAY+"],
   "mikan_host": "https://mikanani.me",
   "data_dir": "data"

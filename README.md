@@ -24,7 +24,9 @@
 
 “新增字幕组”只记录首次出现的“番剧＋组”组合。第一次采集建立现有清单，不把历史组当作刚出现；后续集数、重启、解除屏蔽不会重复提醒。
 
-“已屏蔽”保留原始资源和原因，修改规则会重算历史结果。默认名单包括 ANi、黒ネズミたち、Kirara Fantasia、Nix-Raws（含 Nix-Raw）、ToonsHub、Ansgwrt、沸班亚马；平台标签包括 CR、Crunchyroll、Baha、Bahamut、巴哈、巴哈姆特、CATCHPLAY、CATCHPLAY+。`WEB-DL` 不屏蔽。没有命中名单不等于已证明字幕原创。
+“已屏蔽”保留原始资源和原因，修改规则会重算历史结果。默认名单包括 ANi、黒ネズミたち、Kirara Fantasia、Nix-Raws（含 Nix-Raw）、ToonsHub、Ansgwrt、沸班亚马（含制作组完整名称及Feibanyama）、Skymoon-Raws、YAYOI；平台标签包括 CR、Crunchyroll、Baha、Bahamut、巴哈、巴哈姆特、CATCHPLAY、CATCHPLAY+。`WEB-DL` 不屏蔽。没有命中名单不等于已证明字幕原创。
+
+已标明字幕语言且不含中文的资源默认排除，语言未知保留“未标注”。正文简介里的平台、官字说明也参与筛选；中文字幕证据从字幕轨取，不混用音轨语言。每轮按来源补查最多25条当季上传资源的详情，错误会显示在来源状态中。具体核对与排除依据见 [发布组核对记录](docs/group-review.md)。
 
 “放送待核实”包含缺少可靠跨季证据的作品，可以手动覆盖归属。放送判定使用首播、当前放送日历、单集日期及已知最终集日期，不把上传日期当作正在放送的证据。“未匹配”保留无法可靠对应番剧的资源。
 

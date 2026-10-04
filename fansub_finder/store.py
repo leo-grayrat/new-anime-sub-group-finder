@@ -15,6 +15,12 @@ def dump(value):
     return json.dumps(value, ensure_ascii=False)
 
 
+def merged_reasons(reasons, languages):
+    return sorted(
+        {reason for reason in reasons if reason != "已标注字幕语言不含中文" or not has_chinese(languages)}
+    )
+
+
 class Store:
     def __init__(self, path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -158,9 +164,14 @@ class Store:
               data=excluded.data,reasons=excluded.reasons""",
                 (r.source, r.source_id, resource_id, r.model_dump_json(), dump(reasons), ts),
             )
-            combined_reasons = any(
-                json.loads(row[0])
-                for row in self.db.execute("SELECT reasons FROM origins WHERE resource_id=?", (resource_id,))
+            combined = self.db.execute(
+                "SELECT data,reasons FROM origins WHERE resource_id=?", (resource_id,)
+            ).fetchall()
+            combined_languages = [
+                lang for row in combined for lang in json.loads(row["data"]).get("languages", [])
+            ]
+            combined_reasons = merged_reasons(
+                [reason for row in combined for reason in json.loads(row["reasons"])], combined_languages
             )
             if r.anime_id:
                 key = group_key(r.group)
@@ -238,6 +249,9 @@ class Store:
                 "torrent": r.torrent,
                 "rss": r.rss,
                 "reasons": reasons,
+                "description": r.description,
+                "description_url": r.description_url,
+                "description_checked_at": r.description_checked_at,
             }
             key = row["resource_id"]
             if key in result:
@@ -255,6 +269,11 @@ class Store:
                 for field in ["magnet", "resolution", "published_at"]:
                     if not current[field]:
                         current[field] = getattr(r, field)
+                if (r.description_checked_at and not current["description_checked_at"]) or (
+                    r.description and not current["description"]
+                ):
+                    for field in ["description", "description_url", "description_checked_at"]:
+                        current[field] = getattr(r, field)
                 continue
             result[key] = {
                 **r.model_dump(exclude={"raw"}),
@@ -265,8 +284,7 @@ class Store:
                 "origins": [origin],
             }
         for r in result.values():
-            if has_chinese(r["languages"]):
-                r["reasons"] = [reason for reason in r["reasons"] if reason != "已标注字幕语言不含中文"]
+            r["reasons"] = merged_reasons(r["reasons"], r["languages"])
         return [
             r
             for r in result.values()

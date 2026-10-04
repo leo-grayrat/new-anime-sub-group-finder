@@ -57,12 +57,17 @@ def parse_release_description(html, source, r):
     r.description = body.get_text("\n", strip=True)[:50000]
     # Only inspect the subtitle track block; Chinese audio and credits are not subtitle evidence.
     match = re.search(
-        r"(?:subtitles?(?:\s*\(\d+\))?|字幕(?:语言|語言|轨道|軌道)?)\s*[:：\n](.*?)(?=\n(?:chapters?|duration|checksums?|audio|video|音频|视频|音軌|章節)\b|$)",
+        r"(?:subtitles?(?:\s*\(\d+\))?|字幕(?:语言|語言|轨道|軌道)?)\s*[:：\n](.*?)(?=\n(?:chapters?|duration|checksums?|audio|video|notes?|comments?|credits?|source|音频|视频|音軌|章節|备注|備註|说明|說明)(?:\b|[:：])|$)",
         r.description,
         re.I | re.S,
     )
     if match:
-        block = match.group(1)
+        block = re.sub(
+            r"\b(?:no|without|not(?:\s+available)?|none(?:\s+in)?)\s+[^,;\n|│]*|(?:无|無|没有|沒有|不含)[^，,；;\n|│]*",
+            "",
+            match.group(1),
+            flags=re.I,
+        )
         patterns = {
             "CHS": r"Chinese\s*\(Simplified\)|简体|簡體|\bCHS\b|zh[-_]Hans",
             "CHT": r"Chinese\s*\(Traditional\)|繁体|繁體|\bCHT\b|zh[-_]Hant",
