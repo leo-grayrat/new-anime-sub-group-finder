@@ -24,6 +24,9 @@ class QueryService:
             )
             status["details"] = self.store.get_state(f"details:{source}", {})
             status["error"] = status.get("error") or status["details"].get("error")
+            status["backfill_remaining"] = self.store.get_state(
+                f"backfill-remaining:{self.monitor.config.season}:{source}", 0
+            )
             statuses[source] = status
         return {
             "sources": statuses,

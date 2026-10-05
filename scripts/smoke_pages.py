@@ -55,6 +55,14 @@ async def main():
             await page.wait_for_function("document.querySelectorAll('[data-anime]').length > 1")
             await page.locator('[data-page="changes"]').click()
             await page.get_by_role("heading", name="近 24h 更新", exact=True).wait_for()
+            assert await page.locator("details.recent-update").evaluate_all(
+                "els => new Set(els.map(e => e.dataset.updateAnime)).size === els.length"
+            )
+            if await page.locator("details.recent-update").count():
+                await page.locator("details.recent-update > summary").first.click()
+                await page.locator("details.recent-group > summary").first.click()
+                await page.locator(".resources .resource").first.wait_for()
+                await page.screenshot(path=str(output / "updates.png"), full_page=False)
             await page.locator('[data-page="blocked"]').click()
             await page.locator("details.blocked-group").first.wait_for()
             await page.locator("details.blocked-group summary").first.click()

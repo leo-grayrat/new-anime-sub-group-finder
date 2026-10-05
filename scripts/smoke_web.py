@@ -81,14 +81,27 @@ async def main():
                 await page.screenshot(path=str(output / "blocked.png"), full_page=False)
             if name == "changes":
                 updates = await (await page.request.get(url + "/api/updates")).json()
-                assert await page.locator("details.recent-update").count() == len(updates["items"])
+                assert await page.locator("details.recent-update").count() == len(
+                    {x["anime_id"] for x in updates["items"]}
+                )
+                assert await page.locator("details.recent-update").evaluate_all(
+                    "els => new Set(els.map(e => e.dataset.updateAnime)).size === els.length"
+                )
                 if updates["items"]:
-                    assert await page.locator("#change-items .finder-cover").count() == len(updates["items"])
+                    assert await page.locator("#change-items .finder-cover").count() == len(
+                        {x["anime_id"] for x in updates["items"]}
+                    )
                     await page.wait_for_function(
                         "[...document.querySelectorAll('#change-items .finder-cover img')].some(e => e.complete && e.naturalWidth > 0)",
                         timeout=60000,
                     )
-                    await page.locator("details.recent-update summary").first.click()
+                    await page.locator("details.recent-update > summary").first.click()
+                    expected_groups = sum(
+                        x["anime_id"] == updates["items"][0]["anime_id"] for x in updates["items"]
+                    )
+                    await page.locator("details.recent-group").first.wait_for()
+                    assert await page.locator("details.recent-group").count() == expected_groups
+                    await page.locator("details.recent-group > summary").first.click()
                     await page.locator(".resources .resource").first.wait_for()
                     assert (
                         await page.locator(".resources .resource").count()
@@ -183,7 +196,8 @@ async def main():
             await page.locator('nav [data-page="changes"]').click()
             await page.get_by_role("heading", name="近 24h 更新", exact=True).wait_for()
             if await page.locator("details.recent-update").count():
-                await page.locator("details.recent-update summary").first.click()
+                await page.locator("details.recent-update > summary").first.click()
+                await page.locator("details.recent-group > summary").first.click()
                 await page.locator(".resources .resource").first.wait_for()
                 assert await page.locator(".group-count").first.evaluate(
                     "e => e.getBoundingClientRect().right <= window.innerWidth"

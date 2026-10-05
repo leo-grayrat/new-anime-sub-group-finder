@@ -122,3 +122,30 @@ def test_recent_updates_roll_with_time_and_do_not_treat_rescans_as_publications(
         )
         assert client.get("/api/updates").json()["items"] == []
         assert client.get("/api/updates", params={"season": "bad"}).status_code == 422
+
+
+def test_green_tea_known_name_aliases_merge_updates(tmp_path, monkeypatch):
+    freeze_time(monkeypatch, "2026-10-05T06:00:00+00:00")
+    app = create_app(Config(proxy="", data_dir=str(tmp_path)), start_monitor=False)
+    with TestClient(app) as client:
+        store = app.state.monitor.store
+        store.upsert_anime(Anime(id="bgm:1", title="药屋", premiere="2026-10-01"))
+        for i, name in enumerate(["绿茶字幕组", "綠茶字幕組", "绿茶字幕組"]):
+            store.ingest(
+                Release(
+                    source="anibt",
+                    source_id=str(i),
+                    anime_id="bgm:1",
+                    group=name,
+                    title=f"[{name}] 药屋 - 49 [CHS]",
+                    languages=["CHS"],
+                    published_at="2026-10-05T04:00:00Z",
+                ),
+                Rules(),
+                baseline=True,
+            )
+        updates = client.get("/api/updates").json()["items"]
+        assert len(updates) == 1
+        assert updates[0]["group_id"] == "绿茶字幕组"
+        assert updates[0]["release_count"] == 3
+        assert len(client.get("/api/anime/bgm:1/groups").json()["items"]) == 1

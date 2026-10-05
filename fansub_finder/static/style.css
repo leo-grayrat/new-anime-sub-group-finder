@@ -123,3 +123,5 @@ ul.blocked-anime-list > li.item > .inner { min-height: 118px; }
   .finder-list .anime > .detail { margin-left: -72px; padding-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+
+.source-progress { width: 100%; font-size: 11px; color: var(--finder-muted); overflow-wrap: anywhere; }

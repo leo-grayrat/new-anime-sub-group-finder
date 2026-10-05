@@ -124,11 +124,14 @@ async function health() {
   status = await api('/api/status');
   $('#quarter').textContent = seasonName(status.season);
   $('#health').innerHTML = Object.entries(status.sources).map(([source, value]) => {
-    const working = ['catalog', 'backfill', 'incremental', 'metadata'].includes(value.phase);
-    const label = value.error ? '失败' : working ? '采集中' : value.stale ? '过期' : '正常';
-    return `<div class="health ${value.error ? 'error' : value.stale ? '' : 'ready'}" title="最后成功：${esc(time(value.last_success))}"><b>${sourceNames[source] || esc(source)}</b><span>${label}</span>${value.error ? `<div class="source-error">${esc(value.error)}</div>` : ''}</div>`;
+    const working = ['catalog', 'backfill', 'incremental', 'metadata', 'inspection'].includes(value.phase);
+    const phases = {catalog: '刷新目录', backfill: '补查中', incremental: '取最新', metadata: '核对放送', inspection: '核对简介'};
+    const label = value.error ? '失败' : working ? phases[value.phase] : value.stale ? '过期' : '正常';
+    const detail = working ? status.progress[source] || '' : value.backfill_remaining ? `剩余 ${value.backfill_remaining} 部待补查` : '';
+    return `<div class="health ${value.error ? 'error' : value.stale ? '' : 'ready'}" title="最后成功：${esc(time(value.last_success))}"><b>${sourceNames[source] || esc(source)}</b><span>${label}</span>${value.error ? `<div class="source-error">${esc(value.error)}</div>` : detail ? `<div class="source-progress">${esc(detail)}</div>` : ''}</div>`;
   }).join('');
-  $('#progress').textContent = status.progress.running ? status.progress.message : `更新于 ${time(status.last_scan)}`;
+  const elapsed = Math.max(0, Math.floor((Date.now() - Date.parse(status.progress.started_at || '')) / 60000));
+  $('#progress').textContent = status.progress.running ? `${status.progress.message}${elapsed ? ` · ${elapsed} 分钟` : ''}` : `更新于 ${time(status.last_scan)}`;
   $('#scan').setAttribute('aria-disabled', String(staticMode || status.progress.running));
   $('#scan').textContent = staticMode ? '只读快照' : status.progress.running ? '采集中' : '立即采集';
 }
@@ -188,12 +191,25 @@ async function changesPage() {
   const data = await api('/api/updates');
   if (version !== viewVersion || page !== 'changes') return;
   updatesRefreshedAt = Date.now();
+  const subjects = new Map();
+  for (const group of data.items) {
+    if (!subjects.has(group.anime_id)) subjects.set(group.anime_id, {...group, groups: []});
+    subjects.get(group.anime_id).groups.push(group);
+  }
+  const items = [...subjects.values()];
   $('#page-title').textContent = pageNames.changes;
-  $('#content').innerHTML = `<div id="browserTools" class="clearit"><span>${data.items.length} 组更新</span><span class="tip">${esc(time(data.window_start))} — ${esc(time(data.window_end))}</span></div>` + (data.items.length ? `<ul id="change-items" class="browserFull finder-list">${data.items.map((c, i) => `<li class="item ${i % 2 ? 'even' : 'odd'} clearit">${cover(c.anime_title, c.cover_url)}<div class="inner"><details class="anime recent-update" data-update="${i}"><summary><h3 class="anime-title">${esc(c.anime_title)}</h3><p class="group-preview">${esc(c.group_name)}</p><p class="info tip">${esc(time(c.updated_at))} / 更新集数 ${esc(episodeText(c.episodes))}</p><span class="group-count"><strong>${c.release_count}</strong>条</span></summary><div class="detail resources"></div></details></div></li>`).join('')}</ul>` : empty('近 24 小时暂无更新'));
+  $('#content').innerHTML = `<div id="browserTools" class="clearit"><span>${items.length} 部 / ${data.items.length} 组更新</span><span class="tip">${esc(time(data.window_start))} — ${esc(time(data.window_end))}</span></div>` + (items.length ? `<ul id="change-items" class="browserFull finder-list">${items.map((a, i) => `<li class="item ${i % 2 ? 'even' : 'odd'} clearit">${cover(a.anime_title, a.cover_url)}<div class="inner"><details class="anime recent-update" data-update="${i}" data-update-anime="${esc(a.anime_id)}"><summary><h3 class="anime-title">${esc(a.anime_title)}</h3><p class="group-preview">${esc(a.groups.map(g => g.group_name).join(' / '))}</p><p class="info tip">${esc(time(a.updated_at))}</p><span class="group-count"><strong>${a.groups.length}</strong>组</span></summary><div class="detail recent-groups"></div></details></div></li>`).join('')}</ul>` : empty('近 24 小时暂无更新'));
   $('#content').querySelectorAll('[data-update]').forEach(el => el.addEventListener('toggle', () => {
     if (!el.open || el.dataset.loaded) return;
     el.dataset.loaded = '1';
-    el.querySelector('.resources').innerHTML = data.items[Number(el.dataset.update)].releases.map(resource).join('');
+    const anime = items[Number(el.dataset.update)];
+    const area = el.querySelector('.recent-groups');
+    area.innerHTML = anime.groups.map((g, i) => `<details class="group recent-group" data-update-group="${i}"><summary><b>${esc(g.group_name)}</b><span class="tip">${g.release_count} 条</span></summary><p class="episodes">更新集数：${esc(episodeText(g.episodes))} / ${esc(time(g.updated_at))}</p><div class="resources"></div></details>`).join('');
+    area.querySelectorAll('[data-update-group]').forEach(group => group.addEventListener('toggle', () => {
+      if (!group.open || group.dataset.loaded) return;
+      group.dataset.loaded = '1';
+      group.querySelector('.resources').innerHTML = anime.groups[Number(group.dataset.updateGroup)].releases.map(resource).join('');
+    }));
   }));
 }
 

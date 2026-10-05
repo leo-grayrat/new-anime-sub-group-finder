@@ -94,19 +94,24 @@ class Monitor:
                 pass
         await self.net.close()
 
-    async def run_source(self, source, operation, phase="scan"):
+    async def run_source(self, source, operation, phase="scan", timeout=600):
         previous = self.store.get_state(f"status:{source}", {})
         self.store.set_state(
             f"status:{source}", {**previous, "phase": phase, "last_attempt": now(), "error": None}
         )
         try:
-            await operation()
+            await asyncio.wait_for(operation(), timeout=timeout)
         except asyncio.CancelledError:
             raise
         except Exception as e:
+            message = (
+                f"本阶段采集超时（{timeout:g} 秒）；保留已取得数据，下轮继续"
+                if isinstance(e, TimeoutError)
+                else str(e)[:800]
+            )
             self.store.set_state(
                 f"status:{source}",
-                {**previous, "phase": "error", "last_attempt": now(), "error": str(e)[:800]},
+                {**previous, "phase": "error", "last_attempt": now(), "error": message},
             )
             log.warning("%s failed: %s", source, e)
             return False
@@ -235,11 +240,24 @@ class Monitor:
         if errors:
             raise ValueError("部分放送资料获取失败：" + "; ".join(errors[:3]))
 
-    async def backfill_garden(self, baseline):
-        for i, a in enumerate(self.relevant()):
-            if not a.bgm_id:
-                continue
-            self.progress["garden"] = f"补查 {a.title}"
+    def backfill_batch(self, source, limit):
+        key = f"backfill-items:{self.config.season}:{source}"
+        completed = self.store.get_state(key, {})
+        pending = [a for a in self.relevant() if a.bgm_id and time.time() - completed.get(a.id, 0) >= 86400]
+        remaining_key = f"backfill-remaining:{self.config.season}:{source}"
+        self.store.set_state(remaining_key, len(pending))
+
+        def finish(anime_id):
+            completed[anime_id] = time.time()
+            self.store.set_state(key, completed)
+            self.store.set_state(remaining_key, self.store.get_state(remaining_key, 0) - 1)
+
+        return pending if limit is None else pending[:limit], finish, remaining_key
+
+    async def backfill_garden(self, baseline, limit=10):
+        batch, finish, remaining_key = self.backfill_batch("garden", limit)
+        for i, a in enumerate(batch):
+            self.progress["garden"] = f"补查 {i + 1}/{len(batch)}：{a.title}"
             page = 1
             while True:
                 data = await self.net.json(
@@ -255,21 +273,23 @@ class Monitor:
                 page += 1
                 if page > 200:
                     raise ValueError("资源分页超过安全上限，补查未完成")
+            finish(a.id)
+        return self.store.get_state(remaining_key, 0) == 0
 
-    async def backfill_anibt(self, baseline):
-        for a in self.relevant():
-            if not a.bgm_id:
-                continue
-            self.progress["anibt"] = f"补查 {a.title}"
+    async def backfill_anibt(self, baseline, limit=10):
+        batch, finish, remaining_key = self.backfill_batch("anibt", limit)
+        for i, a in enumerate(batch):
+            self.progress["anibt"] = f"补查 {i + 1}/{len(batch)}：{a.title}"
             try:
                 data = await self.net.json("https://anibt.net/api/anime/groups", {"bgmId": a.bgm_id})
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
+                    finish(a.id)
                     continue
                 raise
             self.ingest(parse_anibt_groups(data), "anibt", baseline)
-            # The groups API returns recent items only. Read each group's per-anime RSS too.
             for group in data["data"]["groups"]:
+                self.progress["anibt"] = f"补查 {i + 1}/{len(batch)}：{a.title} / {group['slug']}"
                 content = await self.net.text(
                     "https://anibt.net/rss/anime.xml", {"bgmId": a.bgm_id, "groupSlug": group["slug"]}
                 )
@@ -282,6 +302,8 @@ class Monitor:
                         )
                     )
                 self.ingest(rs, "anibt", baseline)
+            finish(a.id)
+        return self.store.get_state(remaining_key, 0) == 0
 
     async def recent(self, source, baseline):
         if source == "mikan":
@@ -354,67 +376,80 @@ class Monitor:
 
     async def scan(self, full=False):
         async with self.lock:
-            self.progress = {"running": True, "message": "正在采集", "started_at": now()}
+            self.progress = {"running": True, "message": "采集最新资源", "started_at": now()}
             try:
+                sources = ["mikan", "garden", "anibt"]
                 season = self.config.season
+                baseline = {
+                    source: not self.store.get_state(f"baseline:{source}", False) for source in sources
+                }
+
+                async def latest(source):
+                    self.progress[source] = "读取最新资源"
+                    return await self.run_source(
+                        source, lambda: self.recent(source, baseline[source]), "incremental", timeout=90
+                    )
+
+                recent_ok = dict(zip(sources, await asyncio.gather(*(latest(s) for s in sources))))
+                recent_status = {s: self.store.get_state(f"status:{s}") for s in sources}
+                if any(recent_ok.values()):
+                    self.store.set_state("last_scan", now())
+                    self.progress["latest_finished_at"] = self.store.get_state("last_scan")
                 catalog_key = f"catalog:{season}"
                 catalog_due = (
                     full
                     or time.time() - self.store.get_state(catalog_key, 0) >= self.config.catalog_hours * 3600
                 )
-                catalog_ok = {source: True for source in ["mikan", "garden", "anibt"]}
+                catalog_ok = dict.fromkeys(sources, True)
                 if catalog_due:
-                    self.progress["message"] = "刷新番剧目录与放送资料"
+                    self.progress["message"] = "最新资源已处理；刷新目录"
                     ok = await asyncio.gather(
                         self.run_source("mikan", self.catalog_mikan, "catalog"),
                         self.run_source("garden", self.catalog_garden, "catalog"),
                         self.run_source("anibt", self.catalog_anibt, "catalog"),
                     )
+                    self.progress["message"] = "核对放送资料"
                     bgm_ok = await self.run_source("bgm", self.catalog_bgm, "metadata")
-                    catalog_ok = dict(zip(["mikan", "garden", "anibt"], ok))
+                    catalog_ok = dict(zip(sources, ok))
                     if all(ok) and bgm_ok:
                         self.store.set_state(catalog_key, time.time())
 
                 async def collect(source):
-                    baseline = not self.store.get_state(f"baseline:{source}", False)
+                    if not recent_ok[source]:
+                        self.store.set_state(f"status:{source}", recent_status[source])
+                        return
                     if not catalog_ok[source]:
-                        # A working recent feed cannot erase a failed catalog or finish bootstrap.
-                        try:
-                            await self.recent(source, baseline)
-                        except Exception as error:
-                            previous = self.store.get_state(f"status:{source}", {})
-                            self.store.set_state(
-                                f"status:{source}",
-                                {
-                                    **previous,
-                                    "error": str(previous.get("error", ""))
-                                    + "; 最新资源也失败："
-                                    + str(error)[:300],
-                                },
-                            )
                         return
                     daily_key = f"backfill:{season}:{source}"
-                    due = full or baseline or time.time() - self.store.get_state(daily_key, 0) >= 86400
+                    due = (
+                        full or baseline[source] or time.time() - self.store.get_state(daily_key, 0) >= 86400
+                    )
 
                     async def operation():
+                        complete = True
                         if due:
-                            if source == "garden":
-                                await self.backfill_garden(baseline)
-                            elif source == "anibt":
-                                await self.backfill_anibt(baseline)
+                            if source in ["garden", "anibt"]:
+                                if full:
+                                    self.store.set_state(f"backfill-items:{season}:{source}", {})
+                                method = self.backfill_garden if source == "garden" else self.backfill_anibt
+                                complete = await method(baseline[source], None if full else 10) is not False
                             elif not catalog_due:
                                 await self.catalog_mikan()
-                        await self.recent(source, baseline)
+                            if complete:
+                                self.store.set_state(daily_key, time.time())
                         await self.inspect_descriptions(source)
-                        if due:
-                            self.store.set_state(daily_key, time.time())
-                        self.store.set_state(f"baseline:{source}", True)
+                        if complete:
+                            self.store.set_state(f"baseline:{source}", True)
 
-                    await self.run_source(source, operation, "backfill" if due else "incremental")
+                    await self.run_source(
+                        source,
+                        operation,
+                        "backfill" if due else "inspection",
+                        timeout=600 if full or source == "mikan" and due else 180,
+                    )
 
-                self.progress["message"] = "补齐发布组和集数" if catalog_due else "采集最新资源"
-                await asyncio.gather(*(collect(source) for source in ["mikan", "garden", "anibt"]))
-                self.store.set_state("last_scan", now())
+                self.progress["message"] = "日常补查（分批进行）" if not full else "完整补查"
+                await asyncio.gather(*(collect(source) for source in sources))
             finally:
                 self.progress.update(running=False, message="本轮采集结束", finished_at=now())
 
